@@ -1,8 +1,17 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { IUbs, OrigemCep } from '../types/ubs';
-import { Navigation, ExternalLink, MapPin, Phone } from 'lucide-react';
+import {
+  Navigation,
+  ExternalLink,
+  MapPin,
+  Phone,
+  Plus,
+  Minus,
+  LocateFixed,
+  Layers,
+} from 'lucide-react';
 
 interface UbsMapProps {
   ubsList: IUbs[];
@@ -16,75 +25,125 @@ interface UbsMapProps {
   cepOrigem?: OrigemCep | null;
 }
 
-// Ícone do CEP residencial
-const createCepLocationIcon = () =>
-  L.divIcon({
-    className: 'cep-marker',
-    html: `
-      <div style="
-        width: 32px;
-        height: 32px;
-        background: #2563eb;
-        border: 2px solid #ffffff;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 4px 12px rgba(37,99,235,0.5);
-        transform: translate(-50%, -50%);
-        font-size: 16px;
-      ">
-        🏠
-      </div>
-    `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-  });
+type MapLayerType = 'googleRoadmap' | 'googleSatellite' | 'googleTerrain';
 
-// Ícones Customizados em SVG do Leaflet
-const createUbsIcon = (isSelected: boolean) =>
+const MAP_LAYERS: Record<
+  MapLayerType,
+  { name: string; url: string; subdomains: string[]; attribution: string; icon: string }
+> = {
+  googleRoadmap: {
+    name: 'Padrão',
+    icon: '🗺️',
+    url: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+    subdomains: ['0', '1', '2', '3'],
+    attribution: '&copy; <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer">Google Maps</a>',
+  },
+  googleSatellite: {
+    name: 'Satélite',
+    icon: '🛰️',
+    url: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    subdomains: ['0', '1', '2', '3'],
+    attribution: '&copy; <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer">Google Maps</a>',
+  },
+  googleTerrain: {
+    name: 'Relevo',
+    icon: '⛰️',
+    url: 'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
+    subdomains: ['0', '1', '2', '3'],
+    attribution: '&copy; <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer">Google Maps</a>',
+  },
+};
+
+// Marcador do CEP Residencial — Estilo Google Maps azul com ícone de casa
+const createGoogleCepIcon = () =>
   L.divIcon({
-    className: 'custom-leaflet-marker',
+    className: 'google-cep-marker',
     html: `
       <div style="
-        width: ${isSelected ? '38px' : '28px'};
-        height: ${isSelected ? '38px' : '28px'};
-        background: ${isSelected ? '#047857' : '#059669'};
-        border: ${isSelected ? '3px solid #ffffff' : '2px solid #ffffff'};
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: ${isSelected ? '0 0 0 3px rgba(5, 150, 105, 0.4), 0 6px 14px rgba(0,0,0,0.35)' : '0 3px 8px rgba(0,0,0,0.25)'};
-        transform: translate(-50%, -50%);
-        transition: all 0.25s ease;
+        filter: drop-shadow(0 3px 6px rgba(0,0,0,0.35));
+        cursor: pointer;
+        transform: translate(-50%, -100%);
       ">
-        <svg width="${isSelected ? '20' : '16'}" height="${isSelected ? '20' : '16'}" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
+        <svg width="34" height="42" viewBox="0 0 32 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 0C7.16 0 0 7.16 0 16C0 27.5 16 40 16 40C16 40 32 27.5 32 16C32 7.16 24.84 0 16 0Z" fill="#1A73E8"/>
+          <circle cx="16" cy="15" r="8" fill="#FFFFFF"/>
+          <path d="M11 16.5V19.5H14.5V17H17.5V19.5H21V16.5L16 12L11 16.5Z" fill="#1A73E8"/>
         </svg>
       </div>
     `,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
+    iconSize: [34, 42],
+    iconAnchor: [17, 42],
+    popupAnchor: [0, -42],
   });
 
-const createUserLocationIcon = () =>
-  L.divIcon({
-    className: 'user-marker',
+// Marcador de UBS — Estilo Oficial Google Maps (Pin Vermelho ou Verde Destaque com Cruz de Saúde)
+const createGoogleUbsIcon = (isSelected: boolean) => {
+  const pinColor = isSelected ? '#059669' : '#EA4335';
+  const width = isSelected ? 38 : 30;
+  const height = isSelected ? 48 : 38;
+
+  return L.divIcon({
+    className: 'google-ubs-marker',
     html: `
-      <div class="user-location-pulse" style="
-        width: 20px;
-        height: 20px;
-        background: #2563eb;
-        border: 3px solid #ffffff;
-        border-radius: 50%;
-        box-shadow: 0 0 10px rgba(37,99,235,0.6);
-        transform: translate(-50%, -50%);
-      "></div>
+      <div style="
+        filter: drop-shadow(0 3px 8px rgba(0,0,0,${isSelected ? '0.5' : '0.35'}));
+        cursor: pointer;
+        transform: translate(-50%, -100%);
+        transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      ">
+        <svg width="${width}" height="${height}" viewBox="0 0 32 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 0C7.16 0 0 7.16 0 16C0 27.5 16 40 16 40C16 40 32 27.5 32 16C32 7.16 24.84 0 16 0Z" fill="${pinColor}"/>
+          <circle cx="16" cy="15" r="7.5" fill="#FFFFFF"/>
+          <path d="M16 11V19M12 15H20" stroke="${pinColor}" stroke-width="2.6" stroke-linecap="round"/>
+        </svg>
+        ${
+          isSelected
+            ? `<div style="
+                position: absolute;
+                top: -4px;
+                left: -4px;
+                right: -4px;
+                bottom: 8px;
+                border-radius: 50%;
+                border: 2px solid #059669;
+                animation: google-pulse 1.8s infinite;
+                pointer-events: none;
+              "></div>`
+            : ''
+        }
+      </div>
     `,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
+    iconSize: [width, height],
+    iconAnchor: [width / 2, height],
+    popupAnchor: [0, -height],
+  });
+};
+
+// Marcador de Localização do Usuário (GPS) — Ponto Azul Google Maps com radar pulsante
+const createGoogleUserLocationIcon = () =>
+  L.divIcon({
+    className: 'google-user-location-marker',
+    html: `
+      <div style="position: relative; width: 22px; height: 22px;">
+        <div class="google-gps-pulse" style="
+          position: absolute;
+          inset: -8px;
+          border-radius: 50%;
+          background: rgba(66, 133, 244, 0.4);
+        "></div>
+        <div style="
+          position: absolute;
+          inset: 0;
+          background: #1A73E8;
+          border: 3px solid #FFFFFF;
+          border-radius: 50%;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+        "></div>
+      </div>
+    `,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+    popupAnchor: [0, -11],
   });
 
 // Componente para recentralizar o mapa suavemente
@@ -97,7 +156,6 @@ const MapController: React.FC<{
 }> = ({ userLat, userLon, selectedUbs, ubsList, hasActiveFilter }) => {
   const map = useMap();
 
-  // Recalcula o tamanho do mapa sempre que o container mudar (ex.: recolher a barra lateral)
   useEffect(() => {
     const container = map.getContainer();
     const observer = new ResizeObserver(() => map.invalidateSize());
@@ -111,7 +169,6 @@ const MapController: React.FC<{
     } else if (userLat !== null && userLon !== null) {
       map.flyTo([userLat, userLon], 14, { duration: 1.2 });
     } else if (hasActiveFilter && ubsList.length > 0) {
-      // Ajusta os limites apenas quando houver filtro ativo de busca (cidade, termo, UF ou GPS)
       const validCoords = ubsList.filter((u) => u.latitude && u.longitude);
       if (validCoords.length > 0) {
         const bounds = L.latLngBounds(
@@ -146,42 +203,151 @@ const MapViewportWatcher: React.FC<{
   return null;
 };
 
+// Controles Flutuantes com design idêntico ao Google Maps
+const GoogleMapControlsOverlay: React.FC<{
+  userLat: number | null;
+  userLon: number | null;
+  cepOrigem?: OrigemCep | null;
+  currentLayer: MapLayerType;
+  onChangeLayer: (layer: MapLayerType) => void;
+}> = ({ userLat, userLon, cepOrigem, currentLayer, onChangeLayer }) => {
+  const map = useMap();
+  const [showLayerMenu, setShowLayerMenu] = useState(false);
+
+  const handleRecenter = () => {
+    if (cepOrigem && cepOrigem.latitude && cepOrigem.longitude) {
+      map.flyTo([cepOrigem.latitude, cepOrigem.longitude], 15, { duration: 1 });
+    } else if (userLat !== null && userLon !== null) {
+      map.flyTo([userLat, userLon], 15, { duration: 1 });
+    } else {
+      map.flyTo([-14.235, -51.9253], 5, { duration: 1.2 });
+    }
+  };
+
+  return (
+    <>
+      {/* Botão Seletor de Camadas — Canto Inferior Esquerdo (Estilo Google Maps) */}
+      <div className="leaflet-bottom leaflet-left !pointer-events-auto" style={{ zIndex: 900 }}>
+        <div className="p-3">
+          <div className="relative">
+            {showLayerMenu && (
+              <div className="absolute bottom-full left-0 mb-2 p-1.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/90 dark:border-slate-700 flex flex-col gap-1 min-w-[130px]">
+                {(Object.keys(MAP_LAYERS) as MapLayerType[]).map((layerKey) => {
+                  const info = MAP_LAYERS[layerKey];
+                  const isActive = currentLayer === layerKey;
+                  return (
+                    <button
+                      key={layerKey}
+                      type="button"
+                      onClick={() => {
+                        onChangeLayer(layerKey);
+                        setShowLayerMenu(false);
+                      }}
+                      className={`flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-xl text-left transition ${
+                        isActive
+                          ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold'
+                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <span className="text-base">{info.icon}</span>
+                      <span>{info.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowLayerMenu(!showLayerMenu)}
+              className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md text-slate-700 dark:text-slate-200 text-xs font-bold shadow-xl border border-slate-200/90 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 hover:scale-105 active:scale-95 transition-all"
+              title="Trocar camada do mapa (Padrão, Satélite ou Relevo)"
+            >
+              <Layers className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>{MAP_LAYERS[currentLayer].icon} {MAP_LAYERS[currentLayer].name}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Controles de Zoom e GPS — Canto Inferior Direito (Estilo Oficial Google Maps) */}
+      <div className="leaflet-bottom leaflet-right !pointer-events-auto" style={{ zIndex: 900 }}>
+        <div className="p-3 flex flex-col items-center gap-2">
+          {/* Botão Minha Localização (Google Maps GPS Crosshair) */}
+          <button
+            type="button"
+            onClick={handleRecenter}
+            className="w-10 h-10 rounded-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-xl border border-slate-200/90 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-emerald-600 dark:hover:text-emerald-400 active:scale-90 transition-all"
+            title="Recentralizar na minha localização"
+            aria-label="Recentralizar na minha localização"
+          >
+            <LocateFixed className="w-5 h-5" />
+          </button>
+
+          {/* Botões Verticais de Zoom (+ / −) */}
+          <div className="flex flex-col bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/90 dark:border-slate-700 overflow-hidden divide-y divide-slate-200 dark:divide-slate-700">
+            <button
+              type="button"
+              onClick={() => map.zoomIn()}
+              className="w-10 h-10 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 transition"
+              title="Aumentar zoom"
+              aria-label="Aumentar zoom"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => map.zoomOut()}
+              className="w-10 h-10 flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 transition"
+              title="Diminuir zoom"
+              aria-label="Diminuir zoom"
+            >
+              <Minus className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
 export const UbsMap: React.FC<UbsMapProps> = ({
   ubsList,
   userLat,
   userLon,
   selectedUbsId,
   onSelectUbs,
-  isDarkMode,
   hasActiveFilter = false,
   onViewportChange,
   cepOrigem,
 }) => {
+  const [currentLayer, setCurrentLayer] = useState<MapLayerType>('googleRoadmap');
+
   // Ponto central padrão: Centro geográfico do Brasil (para visualização de abrangência nacional)
   const defaultCenter: [number, number] = userLat && userLon
     ? [userLat, userLon]
     : [-14.235, -51.9253];
 
   const defaultZoom = userLat && userLon ? 13 : 4;
-
   const selectedUbs = ubsList.find((u) => u.id === selectedUbsId) || null;
+  const activeTileConfig = MAP_LAYERS[currentLayer];
 
   return (
     <div className="absolute inset-0 overflow-hidden">
       <MapContainer
         center={defaultCenter}
         zoom={defaultZoom}
+        zoomControl={false}
         scrollWheelZoom={true}
         className="w-full h-full"
       >
-        {/* Camada de Tiles OpenStreetMap oficial */}
+        {/* Camada Oficial de Tiles do Google Maps (Roadmap, Satélite Híbrido ou Terreno) */}
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> colaboradores'
-          url={
-            isDarkMode
-              ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-              : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-          }
+          key={currentLayer}
+          attribution={activeTileConfig.attribution}
+          url={activeTileConfig.url}
+          subdomains={activeTileConfig.subdomains}
+          maxZoom={20}
         />
 
         <MapController
@@ -197,11 +363,20 @@ export const UbsMap: React.FC<UbsMapProps> = ({
           enabled={!hasActiveFilter}
         />
 
+        {/* Controles no estilo Google Maps (Zoom, Camadas e GPS) */}
+        <GoogleMapControlsOverlay
+          userLat={userLat}
+          userLon={userLon}
+          cepOrigem={cepOrigem}
+          currentLayer={currentLayer}
+          onChangeLayer={setCurrentLayer}
+        />
+
         {/* Marcador do CEP Residencial */}
         {cepOrigem && (
-          <Marker position={[cepOrigem.latitude, cepOrigem.longitude]} icon={createCepLocationIcon()}>
+          <Marker position={[cepOrigem.latitude, cepOrigem.longitude]} icon={createGoogleCepIcon()}>
             <Popup>
-              <div className="text-xs p-1 space-y-1 max-w-xs">
+              <div className="text-xs p-1 space-y-1.5 max-w-xs font-sans">
                 <span className="font-bold text-blue-600 block text-sm">
                   🏠 Seu CEP: {cepOrigem.cep.replace(/(\d{5})(\d{3})/, '$1-$2')}
                 </span>
@@ -210,8 +385,8 @@ export const UbsMap: React.FC<UbsMapProps> = ({
                   {cepOrigem.bairro ? `${cepOrigem.bairro} - ` : ''}
                   {cepOrigem.municipio}/{cepOrigem.uf}
                 </span>
-                <span className="text-[10px] text-slate-400 block pt-1 border-t border-slate-200 dark:border-slate-700">
-                  Ponto de partida para o cálculo da UBS mais próxima.
+                <span className="text-[11px] text-slate-400 block pt-1 border-t border-slate-200 dark:border-slate-700">
+                  Ponto de referência para cálculo da UBS mais próxima.
                 </span>
               </div>
             </Popup>
@@ -220,17 +395,17 @@ export const UbsMap: React.FC<UbsMapProps> = ({
 
         {/* Marcador da Localização do Usuário (se consentida via GPS direto, sem CEP) */}
         {!cepOrigem && userLat !== null && userLon !== null && (
-          <Marker position={[userLat, userLon]} icon={createUserLocationIcon()}>
+          <Marker position={[userLat, userLon]} icon={createGoogleUserLocationIcon()}>
             <Popup>
-              <div className="text-xs p-1">
-                <span className="font-bold text-blue-600 block">Sua Localização GPS</span>
-                <span className="text-slate-500">Coordenadas obtidas com sua autorização via navegador.</span>
+              <div className="text-xs p-1 font-sans">
+                <span className="font-bold text-blue-600 block text-sm">Sua Localização GPS</span>
+                <span className="text-slate-500">Coordenadas obtidas via navegador com seu consentimento.</span>
               </div>
             </Popup>
           </Marker>
         )}
 
-        {/* Marcadores das UBS cadastradas */}
+        {/* Marcadores das UBS cadastradas com Pin Oficial Google Maps */}
         {ubsList.map((ubs) => {
           if (!ubs.latitude || !ubs.longitude) return null;
           const isSelected = ubs.id === selectedUbsId;
@@ -239,18 +414,19 @@ export const UbsMap: React.FC<UbsMapProps> = ({
             <Marker
               key={ubs.id}
               position={[ubs.latitude, ubs.longitude]}
-              icon={createUbsIcon(isSelected)}
+              icon={createGoogleUbsIcon(isSelected)}
+              zIndexOffset={isSelected ? 1000 : 0}
               eventHandlers={{
                 click: () => onSelectUbs(ubs.id),
               }}
             >
               <Popup>
-                <div className="text-xs p-1 space-y-2 max-w-xs">
+                <div className="text-xs p-1 space-y-2 max-w-xs font-sans">
                   <div>
-                    <span className="inline-block text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 mb-1">
+                    <span className="inline-block text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300 mb-1 border border-red-200 dark:border-red-900">
                       {ubs.tipoEstabelecimento}
                     </span>
-                    <span className="font-bold text-emerald-800 dark:text-emerald-300 block text-sm leading-snug">
+                    <span className="font-bold text-slate-900 dark:text-white block text-sm leading-snug">
                       {ubs.nomeOficial}
                     </span>
                     {ubs.cnes && (
@@ -260,34 +436,34 @@ export const UbsMap: React.FC<UbsMapProps> = ({
                     )}
                   </div>
 
-                  <div className="flex items-start gap-1 text-slate-600 dark:text-slate-300">
-                    <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-600" />
+                  <div className="flex items-start gap-1.5 text-slate-600 dark:text-slate-300">
+                    <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5 text-red-500" />
                     <span>
                       {ubs.endereco}{ubs.numero ? `, ${ubs.numero}` : ''} - {ubs.municipio}/{ubs.uf}
                     </span>
                   </div>
 
                   {ubs.telefone && (
-                    <div className="flex items-center gap-1 text-slate-600 dark:text-slate-300">
+                    <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
                       <Phone className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                      <span>{ubs.telefone}</span>
+                      <a href={`tel:${ubs.telefone}`} className="hover:underline">{ubs.telefone}</a>
                     </div>
                   )}
 
                   {ubs.distanciaKm !== undefined && (
-                    <div className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                      <Navigation className="w-3 h-3" />
+                    <div className="text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/50 p-1.5 rounded-lg border border-emerald-200 dark:border-emerald-900">
+                      <Navigation className="w-3.5 h-3.5 text-emerald-600" />
                       <span>{ubs.distanciaKm} km de distância</span>
                     </div>
                   )}
 
                   {ubs.rotasExternas && (
-                    <div className="pt-2 flex items-center gap-3 border-t border-slate-200 dark:border-slate-700">
+                    <div className="pt-2 flex items-center gap-2 border-t border-slate-200 dark:border-slate-700">
                       <a
                         href={ubs.rotasExternas.googleMaps}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 font-medium flex items-center gap-1"
+                        className="flex-1 py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-center text-[11px] flex items-center justify-center gap-1 shadow-sm transition"
                       >
                         Google Maps <ExternalLink className="w-3 h-3" />
                       </a>
@@ -295,7 +471,7 @@ export const UbsMap: React.FC<UbsMapProps> = ({
                         href={ubs.rotasExternas.waze}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 font-medium flex items-center gap-1"
+                        className="py-1.5 px-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg font-semibold text-center text-[11px] flex items-center justify-center gap-1 transition"
                       >
                         Waze <ExternalLink className="w-3 h-3" />
                       </a>

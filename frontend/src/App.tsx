@@ -259,20 +259,22 @@ function MainApplication() {
               cepOrigem={filters.cepOrigem}
             />
 
-            {/* Recolher / expandir a lista (apenas desktop) */}
+            {/* Recolher / expandir a lista (posicionado mais à direita com estilo flutuante Google Maps) */}
             <button
               type="button"
               onClick={() => setIsSidebarOpen((v) => !v)}
-              className="hidden lg:flex absolute top-3 left-3 z-20 items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="hidden lg:flex absolute top-4 left-8 z-30 items-center gap-2 px-3.5 py-2 rounded-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md text-slate-700 dark:text-slate-200 text-xs font-bold shadow-xl border border-slate-200/90 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 hover:scale-105 active:scale-95 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500"
               aria-label={isSidebarOpen ? 'Recolher lista de unidades' : 'Expandir lista de unidades'}
               aria-expanded={isSidebarOpen}
             >
               {isSidebarOpen ? (
-                <PanelLeftClose className="w-4 h-4" />
+                <PanelLeftClose className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               ) : (
-                <PanelLeftOpen className="w-4 h-4" />
+                <PanelLeftOpen className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               )}
-              {isSidebarOpen ? 'Recolher lista' : `Lista (${total.toLocaleString('pt-BR')})`}
+              <span>
+                {isSidebarOpen ? 'Recolher lista' : `Ver lista (${total.toLocaleString('pt-BR')})`}
+              </span>
             </button>
           </section>
         </div>
