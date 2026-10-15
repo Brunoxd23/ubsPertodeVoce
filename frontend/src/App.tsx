@@ -29,6 +29,7 @@ const initialFilters: UbsFilterState = {
   userLon: null,
   page: 1,
   limit: 10,
+  cepOrigem: null,
 };
 
 function MainApplication() {
@@ -255,6 +256,7 @@ function MainApplication() {
               isDarkMode={isDarkMode}
               hasActiveFilter={hasActiveFilter}
               onViewportChange={setMapViewport}
+              cepOrigem={filters.cepOrigem}
             />
 
             {/* Recolher / expandir a lista (apenas desktop) */}

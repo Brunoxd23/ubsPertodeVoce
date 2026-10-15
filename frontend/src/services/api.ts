@@ -1,4 +1,4 @@
-import { UbsListResponse, UbsFilterState, IUbs, UbsMapParams, UbsMapResponse } from '../types/ubs';
+import { UbsListResponse, UbsFilterState, IUbs, UbsMapParams, UbsMapResponse, CepProximityResponse } from '../types/ubs';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
@@ -114,4 +114,25 @@ export async function fetchHealth(): Promise<{ status: string; uptimeSegundos: n
   }
   return await res.json();
 }
+
+export async function fetchUbsByCep(
+  cep: string,
+  raioKm: number = 10,
+  limit: number = 10
+): Promise<CepProximityResponse> {
+  const cleanCep = cep.replace(/\D/g, '');
+  const params = new URLSearchParams({
+    raioKm: raioKm.toString(),
+    limit: limit.toString(),
+  });
+
+  const res = await fetch(`${API_BASE_URL}/cep/${encodeURIComponent(cleanCep)}?${params.toString()}`);
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    throw new Error(errorData?.mensagem || 'Não foi possível localizar o CEP informado.');
+  }
+
+  return await res.json();
+}
+
 

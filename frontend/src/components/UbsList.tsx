@@ -100,12 +100,13 @@ export const UbsList: React.FC<UbsListProps> = ({
 
       {/* Lista de Cards */}
       <div className="space-y-3">
-        {items.map((ubs: IUbs) => (
+        {items.map((ubs: IUbs, index: number) => (
           <UbsCard
             key={ubs.id}
             ubs={ubs}
             isSelected={ubs.id === selectedUbsId}
             onSelect={() => onSelectUbs(ubs.id)}
+            isClosest={page === 1 && index === 0 && ubs.distanciaKm !== undefined}
           />
         ))}
       </div>

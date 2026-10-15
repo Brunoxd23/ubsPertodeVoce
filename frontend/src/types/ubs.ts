@@ -54,6 +54,17 @@ export interface UbsListResponse {
   dados: IUbs[];
 }
 
+export interface OrigemCep {
+  cep: string;
+  logradouro?: string;
+  bairro?: string;
+  municipio: string;
+  uf: string;
+  latitude: number;
+  longitude: number;
+  fonte: string;
+}
+
 export interface UbsFilterState {
   termo: string;
   uf: string;
@@ -63,6 +74,7 @@ export interface UbsFilterState {
   userLon: number | null;
   page: number;
   limit: number;
+  cepOrigem?: OrigemCep | null;
 }
 
 export interface UbsMapParams {
@@ -88,4 +100,18 @@ export interface UbsMapResponse {
   };
   dados: IUbs[];
 }
+
+export interface CepProximityResponse {
+  sucesso: boolean;
+  origemCep: OrigemCep;
+  ubsMaisProxima: IUbs | null;
+  metadados: {
+    total: number;
+    raioKm: number;
+    fonteOficial: string;
+    avisoLegal: string;
+  };
+  dados: IUbs[];
+}
+
 

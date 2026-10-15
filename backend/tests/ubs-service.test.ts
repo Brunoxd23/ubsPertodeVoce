@@ -97,10 +97,21 @@ describe('UbsService - Consultas Geográficas e Regras de Negócio', () => {
     const buscaMunicipio = await service.searchUbs({ termo: 'Taboão da Serra', page: 1, limit: 10 });
     expect(buscaMunicipio.dados.length).toBeGreaterThanOrEqual(9);
 
-    // 4. Busca por CEP "06786-070"
+    // 4. Busca por CEP "06786-070" (encontra UBSs próximas ao CEP)
     const buscaCep = await service.searchUbs({ termo: '06786-070', page: 1, limit: 10 });
     expect(buscaCep.dados.length).toBeGreaterThan(0);
-    expect(buscaCep.dados[0].cnes).toBe('2061279');
+    expect(buscaCep.dados.some((u) => u.cnes === '2061279')).toBe(true);
+  });
+
+  it('deve localizar a UBS mais próxima a partir de qualquer CEP com findClosestByCep', async () => {
+    const res = await service.findClosestByCep('06786-070');
+    expect(res.sucesso).toBe(true);
+    expect(res.origemCep.cep).toBe('06786070');
+    expect(res.origemCep.municipio).toBe('Taboão da Serra');
+    expect(res.ubsMaisProxima).not.toBeNull();
+    expect(res.ubsMaisProxima?.distanciaKm).toBeDefined();
+    expect(res.ubsMaisProxima?.distanciaKm!).toBeLessThan(2);
+    expect(res.dados.length).toBeGreaterThan(0);
   });
 
   it('deve lançar NotFoundError ao buscar CNES inexistente', async () => {

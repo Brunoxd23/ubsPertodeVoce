@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { IUbs } from '../types/ubs';
+import { IUbs, OrigemCep } from '../types/ubs';
 import { Navigation, ExternalLink, MapPin, Phone } from 'lucide-react';
 
 interface UbsMapProps {
@@ -13,7 +13,33 @@ interface UbsMapProps {
   isDarkMode: boolean;
   hasActiveFilter?: boolean;
   onViewportChange?: (bounds: { minLat: number; maxLat: number; minLon: number; maxLon: number; zoom: number }) => void;
+  cepOrigem?: OrigemCep | null;
 }
+
+// Ícone do CEP residencial
+const createCepLocationIcon = () =>
+  L.divIcon({
+    className: 'cep-marker',
+    html: `
+      <div style="
+        width: 32px;
+        height: 32px;
+        background: #2563eb;
+        border: 2px solid #ffffff;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(37,99,235,0.5);
+        transform: translate(-50%, -50%);
+        font-size: 16px;
+      ">
+        🏠
+      </div>
+    `,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+  });
 
 // Ícones Customizados em SVG do Leaflet
 const createUbsIcon = (isSelected: boolean) =>
@@ -129,6 +155,7 @@ export const UbsMap: React.FC<UbsMapProps> = ({
   isDarkMode,
   hasActiveFilter = false,
   onViewportChange,
+  cepOrigem,
 }) => {
   // Ponto central padrão: Centro geográfico do Brasil (para visualização de abrangência nacional)
   const defaultCenter: [number, number] = userLat && userLon
@@ -170,12 +197,33 @@ export const UbsMap: React.FC<UbsMapProps> = ({
           enabled={!hasActiveFilter}
         />
 
-        {/* Marcador da Localização do Usuário (se consentida) */}
-        {userLat !== null && userLon !== null && (
+        {/* Marcador do CEP Residencial */}
+        {cepOrigem && (
+          <Marker position={[cepOrigem.latitude, cepOrigem.longitude]} icon={createCepLocationIcon()}>
+            <Popup>
+              <div className="text-xs p-1 space-y-1 max-w-xs">
+                <span className="font-bold text-blue-600 block text-sm">
+                  🏠 Seu CEP: {cepOrigem.cep.replace(/(\d{5})(\d{3})/, '$1-$2')}
+                </span>
+                <span className="text-slate-600 dark:text-slate-300 block text-xs">
+                  {cepOrigem.logradouro ? `${cepOrigem.logradouro}, ` : ''}
+                  {cepOrigem.bairro ? `${cepOrigem.bairro} - ` : ''}
+                  {cepOrigem.municipio}/{cepOrigem.uf}
+                </span>
+                <span className="text-[10px] text-slate-400 block pt-1 border-t border-slate-200 dark:border-slate-700">
+                  Ponto de partida para o cálculo da UBS mais próxima.
+                </span>
+              </div>
+            </Popup>
+          </Marker>
+        )}
+
+        {/* Marcador da Localização do Usuário (se consentida via GPS direto, sem CEP) */}
+        {!cepOrigem && userLat !== null && userLon !== null && (
           <Marker position={[userLat, userLon]} icon={createUserLocationIcon()}>
             <Popup>
               <div className="text-xs p-1">
-                <span className="font-bold text-blue-600 block">Sua Localização Atual</span>
+                <span className="font-bold text-blue-600 block">Sua Localização GPS</span>
                 <span className="text-slate-500">Coordenadas obtidas com sua autorização via navegador.</span>
               </div>
             </Popup>

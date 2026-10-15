@@ -149,4 +149,28 @@ describe('API REST - Testes de Integração e Segurança (Fastify Endpoints)', (
       expect(d.longitude).toBeLessThanOrEqual(-46.4);
     });
   });
+
+  it('GET /api/v1/cep/:cep - deve resolver qualquer CEP brasileiro e retornar a primeira UBS mais próxima', async () => {
+    // CEP do Jardim Margarida / São Judas em Taboão da Serra - SP
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/cep/06786-070?raioKm=10',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.sucesso).toBe(true);
+    expect(body.origemCep).toBeDefined();
+    expect(body.origemCep.cep).toBe('06786070');
+    expect(body.origemCep.municipio).toBe('Taboão da Serra');
+    expect(body.origemCep.latitude).toBeDefined();
+    expect(body.origemCep.longitude).toBeDefined();
+
+    // Deve retornar a UBS mais próxima no topo
+    expect(body.ubsMaisProxima).toBeDefined();
+    expect(body.ubsMaisProxima.distanciaKm).toBeDefined();
+    expect(body.ubsMaisProxima.distanciaKm).toBeLessThan(2);
+    expect(body.dados.length).toBeGreaterThan(0);
+    expect(body.dados[0].id).toBe(body.ubsMaisProxima.id);
+  });
 });

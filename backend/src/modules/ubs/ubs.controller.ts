@@ -10,12 +10,39 @@ import {
   ubsSingleResponseSchema,
   ubsMapQuerySchema,
   ubsMapResponseSchema,
+  cepParamSchema,
+  cepQuerySchema,
+  cepProximityResponseSchema,
 } from './ubs.schemas.js';
 
 export const ubsRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   const repository = await getUbsRepository();
   const ubsService = new UbsService(repository);
   const typedApp = app.withTypeProvider<ZodTypeProvider>();
+
+  // Rota de busca da UBS mais próxima por CEP
+  typedApp.get(
+    '/cep/:cep',
+    {
+      schema: {
+        tags: ['CEP'],
+        summary: 'Localiza a UBS mais próxima a partir de qualquer CEP brasileiro',
+        description:
+          'Geocodifica o CEP residencial informado para coordenadas exatas de latitude/longitude e retorna a UBS mais próxima e unidades vizinhas ordenadas por distância.',
+        params: cepParamSchema,
+        querystring: cepQuerySchema,
+        response: {
+          200: cepProximityResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const { cep } = request.params;
+      const { raioKm, limit } = request.query;
+      const result = await ubsService.findClosestByCep(cep, raioKm, limit);
+      return reply.status(200).send(result);
+    }
+  );
 
   // Rota de marcadores para mapa dinâmico (amostragem nacional, bounding box ou proximidade)
   typedApp.get(

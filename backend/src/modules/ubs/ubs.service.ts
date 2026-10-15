@@ -2,6 +2,7 @@ import { IUbsRepository, UbsSearchParams, UbsMapParams } from '../../db/database
 import { IUbsWithDistance } from './ubs.entity.js';
 import { NotFoundError } from '../../core/errors/app-error.js';
 import { OsmLiveProvider } from '../importer/osm-live-provider.js';
+import { CepGeocoderService } from '../geocoding/cep-geocoder.service.js';
 
 export class UbsService {
   constructor(private ubsRepository: IUbsRepository) {}
@@ -15,7 +16,55 @@ export class UbsService {
     return this.enrichWithRouteUrls(item);
   }
 
+  public async findClosestByCep(cep: string, raioKm: number = 10, limit: number = 10) {
+    const location = await CepGeocoderService.geocodeCep(cep);
+    let searchRes = await this.searchUbs({
+      lat: location.latitude,
+      lon: location.longitude,
+      raioKm,
+      page: 1,
+      limit,
+    });
+
+    // Se nenhum resultado no raio inicial (área rural ou baixa densidade), amplia para 50km
+    if (searchRes.dados.length === 0 && raioKm < 50) {
+      searchRes = await this.searchUbs({
+        lat: location.latitude,
+        lon: location.longitude,
+        raioKm: 50,
+        page: 1,
+        limit,
+      });
+    }
+
+    return {
+      sucesso: true as const,
+      origemCep: location,
+      ubsMaisProxima: searchRes.dados[0] || null,
+      metadados: {
+        total: searchRes.metadados.total,
+        raioKm: searchRes.metadados.raioKm || raioKm,
+        fonteOficial: searchRes.metadados.fonteOficial,
+        avisoLegal: searchRes.metadados.avisoLegal,
+      },
+      dados: searchRes.dados,
+    };
+  }
+
   public async getMapPins(params: UbsMapParams) {
+    // Se o termo informado for um CEP, resolve as coordenadas para exibir os pinos ao redor dele
+    if (params.termo && /^\d{5}-?\d{3}$/.test(params.termo.trim()) && params.lat === undefined) {
+      try {
+        const loc = await CepGeocoderService.geocodeCep(params.termo.trim());
+        params.lat = loc.latitude;
+        params.lon = loc.longitude;
+        params.raioKm = params.raioKm || 10;
+        delete params.termo;
+      } catch {
+        // Mantém busca padrão
+      }
+    }
+
     const result = await this.ubsRepository.getMapPins(params);
     const enrichedItems = result.items
       .filter((item) => item.latitude !== null && item.longitude !== null)
@@ -32,6 +81,26 @@ export class UbsService {
   }
 
   public async searchUbs(params: UbsSearchParams) {
+    // Auto-detecção inteligente de CEP: se o usuário passar um CEP (ou digitar no termo),
+    // resolve a geolocalização exata do endereço e busca por proximidade geográfica!
+    const possibleCep =
+      params.cep ||
+      (params.termo && /^\d{5}-?\d{3}$/.test(params.termo.trim()) ? params.termo.trim() : null);
+
+    if (params.lat === undefined && params.lon === undefined && possibleCep) {
+      try {
+        const location = await CepGeocoderService.geocodeCep(possibleCep);
+        params.lat = location.latitude;
+        params.lon = location.longitude;
+        params.raioKm = params.raioKm || 10;
+        if (params.termo && /^\d{5}-?\d{3}$/.test(params.termo.trim())) {
+          delete params.termo;
+        }
+      } catch {
+        // Mantém parâmetros originais se falhar
+      }
+    }
+
     let result = await this.ubsRepository.search(params);
 
     // Cobertura Nacional Dinâmica:

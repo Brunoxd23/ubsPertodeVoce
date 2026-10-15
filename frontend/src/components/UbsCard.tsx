@@ -13,9 +13,10 @@ interface UbsCardProps {
   ubs: IUbs;
   isSelected?: boolean;
   onSelect?: () => void;
+  isClosest?: boolean;
 }
 
-export const UbsCard: React.FC<UbsCardProps> = ({ ubs, isSelected, onSelect }) => {
+export const UbsCard: React.FC<UbsCardProps> = ({ ubs, isSelected, onSelect, isClosest }) => {
   const [showRoutesMenu, setShowRoutesMenu] = useState(false);
 
   const fullAddress = [
@@ -43,13 +44,20 @@ export const UbsCard: React.FC<UbsCardProps> = ({ ubs, isSelected, onSelect }) =
       className={`p-4 rounded-xl border transition cursor-pointer relative focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
         isSelected
           ? 'bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-500 shadow-md ring-2 ring-emerald-500/30'
+          : isClosest
+          ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-400 dark:border-amber-700 shadow-sm'
           : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700/60 hover:shadow-sm'
       }`}
       aria-label={`Unidade Básica de Saúde: ${ubs.nomeOficial || 'sem nome cadastrado'}`}
     >
-      {/* Top Header: Tipo e Distância */}
+      {/* Top Header: Tipo, Destaque Mais Próxima e Distância */}
       <div className="flex items-start justify-between gap-3 mb-2.5">
         <div className="flex flex-wrap items-center gap-1.5">
+          {isClosest && (
+            <span className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm">
+              ⭐ Mais Próxima
+            </span>
+          )}
           <span className="text-[11px] font-semibold tracking-wide uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80">
             {ubs.tipoEstabelecimento}
           </span>

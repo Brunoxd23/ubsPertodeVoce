@@ -126,3 +126,39 @@ export const ubsMapResponseSchema = z.object({
   dados: z.array(ubsResponseItemSchema),
 });
 
+export const cepParamSchema = z.object({
+  cep: z
+    .string()
+    .trim()
+    .transform((val) => val.replace(/\D/g, ''))
+    .pipe(z.string().length(8, 'CEP deve conter 8 dígitos numéricos')),
+});
+
+export const cepQuerySchema = z.object({
+  raioKm: z.coerce.number().min(0.5).max(100).default(10),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+
+export const cepProximityResponseSchema = z.object({
+  sucesso: z.literal(true),
+  origemCep: z.object({
+    cep: z.string(),
+    logradouro: z.string().optional(),
+    bairro: z.string().optional(),
+    municipio: z.string(),
+    uf: z.string(),
+    latitude: z.number(),
+    longitude: z.number(),
+    fonte: z.string(),
+  }),
+  ubsMaisProxima: ubsResponseItemSchema.nullable(),
+  metadados: z.object({
+    total: z.number(),
+    raioKm: z.number(),
+    fonteOficial: z.string(),
+    avisoLegal: z.string(),
+  }),
+  dados: z.array(ubsResponseItemSchema),
+});
+
+
