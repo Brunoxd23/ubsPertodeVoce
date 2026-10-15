@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: ubs_postgis_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ubs_db
+      POSTGRES_USER: ubs_user
+      POSTGRES_PASSWORD: ubs_secure_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/src/db/migrations/001_init_postgis_ubs.sql:/docker-entrypoint-initdb.d/001_init_postgis_ubs.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ubs_user -d ubs_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ubs_backend_api
+    restart: unless-stopped
+    environment:
+      PORT: 3333
+      HOST: 0.0.0.0
+      NODE_ENV: production
+      DATABASE_URL: postgresql://ubs_user:ubs_secure_password@db:5432/ubs_db
+      USE_EMBEDDED_DB: "false"
+      CORS_ORIGIN: "http://localhost,http://localhost:80,http://127.0.0.1"
+      RATE_LIMIT_MAX: 100
+      RATE_LIMIT_TIME_WINDOW_MS: 60000
+      LOG_LEVEL: info
+      REDACT_GEOLOCATION_LOGS: "true"
+    ports:
+      - "3333:3333"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ubs_frontend_web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+    driver: local
