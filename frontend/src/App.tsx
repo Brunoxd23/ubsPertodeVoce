@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Header } from './components/Header';
 import { SearchBar } from './components/SearchBar';
@@ -6,8 +6,8 @@ import { UbsList } from './components/UbsList';
 import { UbsMap } from './components/UbsMap';
 import { PrivacyModal } from './components/PrivacyModal';
 import { Footer } from './components/Footer';
-import { fetchUbs } from './services/api';
-import { UbsFilterState } from './types/ubs';
+import { fetchUbs, fetchUbsMap } from './services/api';
+import { UbsFilterState, UbsMapParams } from './types/ubs';
 import { Map, List, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 const queryClient = new QueryClient({
@@ -38,6 +38,23 @@ function MainApplication() {
   const [mobileView, setMobileView] = useState<'list' | 'map'>('list');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
+  // Janela visível do mapa (bounding box para pan/zoom dinâmico)
+  const [mapViewport, setMapViewport] = useState<{
+    minLat: number;
+    maxLat: number;
+    minLon: number;
+    maxLon: number;
+    zoom: number;
+  } | null>(null);
+
+  const [debouncedViewport, setDebouncedViewport] = useState(mapViewport);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedViewport(mapViewport);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [mapViewport]);
+
   // Dark Mode State com persistência (apenas preferência de tema, nenhum dado pessoal)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('theme_preference');
@@ -55,11 +72,78 @@ function MainApplication() {
     }
   }, [isDarkMode]);
 
-  // Consulta com TanStack Query
+  // Consulta paginada para a lista lateral (10 itens por página)
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['ubs', filters],
     queryFn: () => fetchUbs(filters),
   });
+
+  // Identifica se há filtro ativo de busca (cidade, estado, texto ou GPS)
+  const hasActiveFilter = Boolean(
+    filters.termo ||
+      filters.uf ||
+      filters.municipio ||
+      (filters.userLat !== null && filters.userLon !== null)
+  );
+
+  // Parâmetros para a consulta de marcadores do mapa
+  const mapQueryParams = useMemo<UbsMapParams>(() => {
+    if (hasActiveFilter) {
+      return {
+        termo: filters.termo || undefined,
+        uf: filters.uf || undefined,
+        municipio: filters.municipio || undefined,
+        lat: filters.userLat ?? undefined,
+        lon: filters.userLon ?? undefined,
+        raioKm: filters.raioKm,
+        limit: 150,
+      };
+    }
+
+    if (debouncedViewport && debouncedViewport.zoom >= 6) {
+      return {
+        minLat: debouncedViewport.minLat,
+        maxLat: debouncedViewport.maxLat,
+        minLon: debouncedViewport.minLon,
+        maxLon: debouncedViewport.maxLon,
+        limit: 150,
+      };
+    }
+
+    // Visão nacional: retorna amostragem balanceada em todos os estados do Brasil
+    return { limit: 162 };
+  }, [
+    hasActiveFilter,
+    filters.termo,
+    filters.uf,
+    filters.municipio,
+    filters.userLat,
+    filters.userLon,
+    filters.raioKm,
+    debouncedViewport,
+  ]);
+
+  // Consulta dedicada para os marcadores do mapa
+  const { data: mapData } = useQuery({
+    queryKey: ['ubs-map', mapQueryParams],
+    queryFn: () => fetchUbsMap(mapQueryParams),
+    staleTime: 1000 * 60 * 2,
+  });
+
+  // Mescla marcadores com o item selecionado (garante exibição mesmo se selecionado na lista)
+  const mapPins = useMemo(() => {
+    const pins = [...(mapData?.dados || [])];
+    if (selectedUbsId) {
+      const alreadyPresent = pins.some((p) => p.id === selectedUbsId);
+      if (!alreadyPresent && data?.dados) {
+        const found = data.dados.find((u) => u.id === selectedUbsId);
+        if (found && found.latitude && found.longitude) {
+          pins.push(found);
+        }
+      }
+    }
+    return pins;
+  }, [mapData?.dados, selectedUbsId, data?.dados]);
 
   // Ao selecionar uma UBS (ex.: clicando no marcador), rola a lista até o card correspondente
   useEffect(() => {
@@ -79,6 +163,7 @@ function MainApplication() {
   const handleResetFilters = () => {
     setFilters(initialFilters);
     setSelectedUbsId(null);
+    setMapViewport(null);
   };
 
   const total = data?.metadados.total ?? 0;
@@ -162,12 +247,14 @@ function MainApplication() {
             className={`${mobileView === 'list' ? 'hidden lg:block' : 'block'} flex-1 min-w-0 relative`}
           >
             <UbsMap
-              ubsList={data?.dados || []}
+              ubsList={mapPins}
               userLat={filters.userLat}
               userLon={filters.userLon}
               selectedUbsId={selectedUbsId}
               onSelectUbs={setSelectedUbsId}
               isDarkMode={isDarkMode}
+              hasActiveFilter={hasActiveFilter}
+              onViewportChange={setMapViewport}
             />
 
             {/* Recolher / expandir a lista (apenas desktop) */}

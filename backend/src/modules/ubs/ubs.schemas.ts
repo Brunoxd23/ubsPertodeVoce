@@ -99,3 +99,30 @@ export const ubsSingleResponseSchema = z.object({
   sucesso: z.literal(true),
   dados: ubsResponseItemSchema,
 });
+
+export const ubsMapQuerySchema = z.object({
+  minLat: z.coerce.number().min(-90).max(90).optional(),
+  maxLat: z.coerce.number().min(-90).max(90).optional(),
+  minLon: z.coerce.number().min(-180).max(180).optional(),
+  maxLon: z.coerce.number().min(-180).max(180).optional(),
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lon: z.coerce.number().min(-180).max(180).optional(),
+  raioKm: z.coerce.number().min(0.5).max(100).default(5),
+  municipio: z.string().trim().optional(),
+  uf: z.string().trim().length(2).toUpperCase().optional(),
+  bairro: z.string().trim().optional(),
+  termo: z.string().trim().optional(),
+  limit: z.coerce.number().int().min(1).max(300).default(150),
+});
+
+export type UbsMapQueryInput = z.infer<typeof ubsMapQuerySchema>;
+
+export const ubsMapResponseSchema = z.object({
+  sucesso: z.literal(true),
+  metadados: z.object({
+    total: z.number(),
+    modo: z.enum(['NACIONAL_DISTRIBUIDO', 'BOUNDING_BOX', 'PROXIMIDADE', 'FILTRO_TEXTUAL']),
+  }),
+  dados: z.array(ubsResponseItemSchema),
+});
+

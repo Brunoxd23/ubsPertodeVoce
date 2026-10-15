@@ -148,5 +148,15 @@ npm test
 
 ---
 
+
+### 🇧🇷 Cobertura Nacional e Indexação de Dados
+* **Microdados Oficiais do Ministério da Saúde**: Conjunto completo de dados do portal oficial com todos os 5.570 municípios brasileiros.
+* **Indexação Geoespacial Ultrarrápida em Banco de Dados**: Banco indexado `backend/data/ubs_nacional.db` com índices B-Tree para busca espacial (Bounding Box em Latitude e Longitude), Município, Bairro, CEP e CNES.
+* **Total de unidades ativas no banco**: 48.041 UBSs em todos os 27 estados da federação.
+* **Mapa com Amostragem Nacional Balanceada**: Na visão inicial do Brasil, exibe unidades distribuídas em todos os estados, atualizando dinamicamente conforme zoom ou busca.
+* **Disponibilidade Universal**: Qualquer cidade ou bairro pesquisado (ex.: Taboão da Serra, Vila Sônia, Curitiba, Fortaleza, Manaus, etc.) retorna as unidades cadastradas no CNES.
+
+---
+
 ## ⚖️ Licença e Responsabilidade Pública
 Distribuído sob a Licença MIT. As informações exibidas são de domínio público, providas pelo Ministério da Saúde. Horários de funcionamento e escalas devem ser confirmados com a unidade antes do comparecimento.

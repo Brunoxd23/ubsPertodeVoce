@@ -8,12 +8,36 @@ import {
   ubsParamSchema,
   ubsListResponseSchema,
   ubsSingleResponseSchema,
+  ubsMapQuerySchema,
+  ubsMapResponseSchema,
 } from './ubs.schemas.js';
 
 export const ubsRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   const repository = await getUbsRepository();
   const ubsService = new UbsService(repository);
   const typedApp = app.withTypeProvider<ZodTypeProvider>();
+
+  // Rota de marcadores para mapa dinâmico (amostragem nacional, bounding box ou proximidade)
+  typedApp.get(
+    '/ubs/map',
+    {
+      schema: {
+        tags: ['UBS'],
+        summary: 'Obtém marcadores de UBS para o mapa interativo',
+        description:
+          'Retorna pontos geoespaciais distribuídos nacionalmente, delimitados por viewport (bounding box) ou filtrados por proximidade GPS e filtros textuais.',
+        querystring: ubsMapQuerySchema,
+        response: {
+          200: ubsMapResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const query = request.query;
+      const result = await ubsService.getMapPins(query);
+      return reply.status(200).send(result);
+    }
+  );
 
   // Rota de listagem e busca geográfica
   typedApp.get(

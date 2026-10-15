@@ -64,3 +64,28 @@ export interface UbsFilterState {
   page: number;
   limit: number;
 }
+
+export interface UbsMapParams {
+  minLat?: number;
+  maxLat?: number;
+  minLon?: number;
+  maxLon?: number;
+  lat?: number | null;
+  lon?: number | null;
+  raioKm?: number;
+  municipio?: string;
+  uf?: string;
+  bairro?: string;
+  termo?: string;
+  limit?: number;
+}
+
+export interface UbsMapResponse {
+  sucesso: boolean;
+  metadados: {
+    total: number;
+    modo: 'NACIONAL_DISTRIBUIDO' | 'BOUNDING_BOX' | 'PROXIMIDADE' | 'FILTRO_TEXTUAL';
+  };
+  dados: IUbs[];
+}
+

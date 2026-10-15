@@ -1,4 +1,4 @@
-import { IUbsRepository, UbsSearchParams } from '../../db/database-adapter.js';
+import { IUbsRepository, UbsSearchParams, UbsMapParams } from '../../db/database-adapter.js';
 import { IUbsWithDistance } from './ubs.entity.js';
 import { NotFoundError } from '../../core/errors/app-error.js';
 import { OsmLiveProvider } from '../importer/osm-live-provider.js';
@@ -13,6 +13,22 @@ export class UbsService {
     }
 
     return this.enrichWithRouteUrls(item);
+  }
+
+  public async getMapPins(params: UbsMapParams) {
+    const result = await this.ubsRepository.getMapPins(params);
+    const enrichedItems = result.items
+      .filter((item) => item.latitude !== null && item.longitude !== null)
+      .map((item) => this.enrichWithRouteUrls(item));
+
+    return {
+      sucesso: true as const,
+      metadados: {
+        total: enrichedItems.length,
+        modo: result.mode,
+      },
+      dados: enrichedItems,
+    };
   }
 
   public async searchUbs(params: UbsSearchParams) {

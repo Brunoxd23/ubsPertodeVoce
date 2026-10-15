@@ -29,9 +29,30 @@ export interface UbsSearchResult {
   total: number;
 }
 
+export interface UbsMapParams {
+  minLat?: number;
+  maxLat?: number;
+  minLon?: number;
+  maxLon?: number;
+  lat?: number;
+  lon?: number;
+  raioKm?: number;
+  municipio?: string;
+  uf?: string;
+  bairro?: string;
+  termo?: string;
+  limit?: number;
+}
+
+export interface UbsMapResult {
+  items: (IUbs & { distanciaKm?: number })[];
+  mode: 'NACIONAL_DISTRIBUIDO' | 'BOUNDING_BOX' | 'PROXIMIDADE' | 'FILTRO_TEXTUAL';
+}
+
 export interface IUbsRepository {
   findByIdOrCnes(idOrCnes: string): Promise<IUbs | null>;
   search(params: UbsSearchParams): Promise<UbsSearchResult>;
+  getMapPins(params: UbsMapParams): Promise<UbsMapResult>;
   upsertMany(items: IUbs[]): Promise<{ inserted: number; updated: number }>;
   count(): Promise<number>;
 }
@@ -245,6 +266,137 @@ export class PostgisUbsRepository implements IUbsRepository {
     }
     return { inserted, updated: 0 };
   }
+
+  public async getMapPins(params: UbsMapParams): Promise<UbsMapResult> {
+    const { minLat, maxLat, minLon, maxLon, lat, lon, raioKm = 5, municipio, uf, bairro, termo, limit = 150 } = params;
+    const conditions: string[] = ['latitude IS NOT NULL', 'longitude IS NOT NULL'];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    if (lat !== undefined && lon !== undefined) {
+      const userGeomSql = `ST_SetSRID(ST_MakePoint($${paramIndex}, $${paramIndex + 1}), 4326)`;
+      values.push(lon, lat);
+      paramIndex += 2;
+      conditions.push(`ST_DWithin(geom::geography, ${userGeomSql}::geography, $${paramIndex})`);
+      values.push(raioKm * 1000);
+      paramIndex += 1;
+
+      const sql = `
+        SELECT 
+          id, cnes, nome_oficial AS "nomeOficial", nome_fantasia AS "nomeFantasia",
+          tipo_estabelecimento AS "tipoEstabelecimento", endereco, numero, complemento,
+          bairro, municipio, uf, cep, telefone, latitude, longitude,
+          fonte_dados AS "fonteDados", 
+          data_atualizacao_fonte AS "dataAtualizacaoFonte",
+          data_ultima_importacao AS "dataUltimaImportacao",
+          status_validacao AS "statusValidacao",
+          ROUND((ST_DistanceSphere(geom, ${userGeomSql}) / 1000.0)::numeric, 2)::float AS "distanciaKm"
+        FROM ubs
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY "distanciaKm" ASC
+        LIMIT $${paramIndex}
+      `;
+      values.push(limit);
+      const res = await this.pool.query(sql, values);
+      return { items: res.rows, mode: 'PROXIMIDADE' };
+    }
+
+    if (termo || municipio || uf || bairro) {
+      if (uf) {
+        conditions.push(`uf = $${paramIndex}`);
+        values.push(uf.toUpperCase());
+        paramIndex++;
+      }
+      if (municipio) {
+        conditions.push(`LOWER(municipio) LIKE $${paramIndex}`);
+        values.push(`%${municipio.toLowerCase()}%`);
+        paramIndex++;
+      }
+      if (bairro) {
+        conditions.push(`LOWER(bairro) LIKE $${paramIndex}`);
+        values.push(`%${bairro.toLowerCase()}%`);
+        paramIndex++;
+      }
+      if (termo) {
+        conditions.push(`(
+          LOWER(nome_oficial) LIKE $${paramIndex} OR 
+          LOWER(nome_fantasia) LIKE $${paramIndex} OR 
+          LOWER(endereco) LIKE $${paramIndex} OR
+          cnes LIKE $${paramIndex}
+        )`);
+        values.push(`%${termo.toLowerCase()}%`);
+        paramIndex++;
+      }
+
+      const sql = `
+        SELECT 
+          id, cnes, nome_oficial AS "nomeOficial", nome_fantasia AS "nomeFantasia",
+          tipo_estabelecimento AS "tipoEstabelecimento", endereco, numero, complemento,
+          bairro, municipio, uf, cep, telefone, latitude, longitude,
+          fonte_dados AS "fonteDados", 
+          data_atualizacao_fonte AS "dataAtualizacaoFonte",
+          data_ultima_importacao AS "dataUltimaImportacao",
+          status_validacao AS "statusValidacao"
+        FROM ubs
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY nome_oficial ASC
+        LIMIT $${paramIndex}
+      `;
+      values.push(limit);
+      const res = await this.pool.query(sql, values);
+      return { items: res.rows, mode: 'FILTRO_TEXTUAL' };
+    }
+
+    if (minLat !== undefined && maxLat !== undefined && minLon !== undefined && maxLon !== undefined) {
+      const latSpan = Math.abs(maxLat - minLat);
+      const lonSpan = Math.abs(maxLon - minLon);
+
+      if (latSpan <= 18 && lonSpan <= 22) {
+        conditions.push(`latitude BETWEEN $${paramIndex} AND $${paramIndex + 1}`);
+        values.push(minLat, maxLat);
+        paramIndex += 2;
+        conditions.push(`longitude BETWEEN $${paramIndex} AND $${paramIndex + 1}`);
+        values.push(minLon, maxLon);
+        paramIndex += 2;
+
+        const sql = `
+          SELECT 
+            id, cnes, nome_oficial AS "nomeOficial", nome_fantasia AS "nomeFantasia",
+            tipo_estabelecimento AS "tipoEstabelecimento", endereco, numero, complemento,
+            bairro, municipio, uf, cep, telefone, latitude, longitude,
+            fonte_dados AS "fonteDados", 
+            data_atualizacao_fonte AS "dataAtualizacaoFonte",
+            data_ultima_importacao AS "dataUltimaImportacao",
+            status_validacao AS "statusValidacao"
+          FROM ubs
+          WHERE ${conditions.join(' AND ')}
+          LIMIT $${paramIndex}
+        `;
+        values.push(limit);
+        const res = await this.pool.query(sql, values);
+        return { items: res.rows, mode: 'BOUNDING_BOX' };
+      }
+    }
+
+    const sql = `
+      WITH Ranked AS (
+        SELECT 
+          id, cnes, nome_oficial AS "nomeOficial", nome_fantasia AS "nomeFantasia",
+          tipo_estabelecimento AS "tipoEstabelecimento", endereco, numero, complemento,
+          bairro, municipio, uf, cep, telefone, latitude, longitude,
+          fonte_dados AS "fonteDados", 
+          data_atualizacao_fonte AS "dataAtualizacaoFonte",
+          data_ultima_importacao AS "dataUltimaImportacao",
+          status_validacao AS "statusValidacao",
+          ROW_NUMBER() OVER(PARTITION BY uf ORDER BY id) as rn
+        FROM ubs
+        WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+      )
+      SELECT * FROM Ranked WHERE rn <= 6 ORDER BY uf, rn
+    `;
+    const res = await this.pool.query(sql);
+    return { items: res.rows, mode: 'NACIONAL_DISTRIBUIDO' };
+  }
 }
 
 // -----------------------------------------------------------------------------------
@@ -372,6 +524,75 @@ export class InMemoryUbsRepository implements IUbsRepository {
       }
     }
     return { inserted, updated };
+  }
+
+  public async getMapPins(params: UbsMapParams): Promise<UbsMapResult> {
+    const { minLat, maxLat, minLon, maxLon, lat, lon, raioKm = 5, municipio, uf, bairro, termo, limit = 150 } = params;
+    let list: (IUbs & { distanciaKm?: number })[] = Array.from(this.items.values()).filter(
+      (i) => i.latitude !== null && i.longitude !== null
+    );
+
+    if (lat !== undefined && lon !== undefined) {
+      const items = list
+        .map((i) => ({ ...i, distanciaKm: calcularHaversineKm(lat, lon, i.latitude!, i.longitude!) }))
+        .filter((i) => i.distanciaKm <= raioKm)
+        .sort((a, b) => a.distanciaKm - b.distanciaKm)
+        .slice(0, limit);
+      return { items, mode: 'PROXIMIDADE' };
+    }
+
+    if (termo || municipio || uf || bairro) {
+      if (uf) {
+        list = list.filter((i) => i.uf.toUpperCase() === uf.toUpperCase());
+      }
+      if (municipio) {
+        list = list.filter((i) => i.municipio.toLowerCase().includes(municipio.toLowerCase()));
+      }
+      if (bairro) {
+        list = list.filter((i) => (i.bairro || '').toLowerCase().includes(bairro.toLowerCase()));
+      }
+      if (termo) {
+        const t = termo.toLowerCase().trim();
+        list = list.filter(
+          (i) =>
+            i.nomeOficial.toLowerCase().includes(t) ||
+            (i.nomeFantasia && i.nomeFantasia.toLowerCase().includes(t)) ||
+            i.endereco.toLowerCase().includes(t) ||
+            (i.cnes && i.cnes.includes(t))
+        );
+      }
+      return { items: list.slice(0, limit), mode: 'FILTRO_TEXTUAL' };
+    }
+
+    if (minLat !== undefined && maxLat !== undefined && minLon !== undefined && maxLon !== undefined) {
+      const latSpan = Math.abs(maxLat - minLat);
+      const lonSpan = Math.abs(maxLon - minLon);
+      if (latSpan <= 18 && lonSpan <= 22) {
+        const bboxItems = list.filter(
+          (i) =>
+            i.latitude! >= minLat &&
+            i.latitude! <= maxLat &&
+            i.longitude! >= minLon &&
+            i.longitude! <= maxLon
+        );
+        return { items: bboxItems.slice(0, limit), mode: 'BOUNDING_BOX' };
+      }
+    }
+
+    const stateCounts: Record<string, number> = {};
+    const distributed: IUbs[] = [];
+    for (const item of list) {
+      const count = stateCounts[item.uf] || 0;
+      if (count < 6) {
+        stateCounts[item.uf] = count + 1;
+        distributed.push(item);
+      }
+    }
+
+    return {
+      items: distributed.length > 0 ? distributed : list.slice(0, limit),
+      mode: 'NACIONAL_DISTRIBUIDO',
+    };
   }
 }
 
@@ -518,6 +739,115 @@ export class SqliteNationalUbsRepository implements IUbsRepository {
     }
     this.db.exec('COMMIT');
     return { inserted: count, updated: 0 };
+  }
+
+  private nationalOverviewCache: IUbs[] | null = null;
+
+  public async getMapPins(params: UbsMapParams): Promise<UbsMapResult> {
+    const { minLat, maxLat, minLon, maxLon, lat, lon, raioKm = 5, municipio, uf, bairro, termo, limit = 150 } = params;
+
+    // 1. Proximidade Geográfica (GPS do usuário)
+    if (lat !== undefined && lon !== undefined) {
+      const deltaLat = (raioKm + 2) / 111.0;
+      const deltaLon = (raioKm + 2) / (111.0 * Math.cos((lat * Math.PI) / 180));
+
+      const sql = `
+        SELECT * FROM ubs 
+        WHERE latitude BETWEEN ? AND ? 
+          AND longitude BETWEEN ? AND ?
+      `;
+      const rows = this.db.prepare(sql).all(lat - deltaLat, lat + deltaLat, lon - deltaLon, lon + deltaLon) as Record<string, unknown>[];
+
+      const items = rows
+        .map((r) => this.mapRowToUbs(r))
+        .filter((i) => i.latitude !== null && i.longitude !== null)
+        .map((i) => ({
+          ...i,
+          distanciaKm: calcularHaversineKm(lat, lon, i.latitude!, i.longitude!),
+        }))
+        .filter((i) => i.distanciaKm <= raioKm)
+        .sort((a, b) => a.distanciaKm - b.distanciaKm)
+        .slice(0, limit);
+
+      return { items, mode: 'PROXIMIDADE' };
+    }
+
+    // 2. Filtros Textuais (Município, UF, Bairro, Termo)
+    if (termo || municipio || uf || bairro) {
+      const conditions: string[] = ['latitude IS NOT NULL', 'longitude IS NOT NULL'];
+      const values: unknown[] = [];
+
+      if (uf) {
+        conditions.push('uf = ?');
+        values.push(uf.toUpperCase());
+      }
+      if (municipio) {
+        conditions.push('municipio LIKE ?');
+        values.push(`%${municipio.toUpperCase()}%`);
+      }
+      if (bairro) {
+        conditions.push('bairro LIKE ?');
+        values.push(`%${bairro.toUpperCase()}%`);
+      }
+      if (termo) {
+        const t = `%${termo.toUpperCase().trim()}%`;
+        conditions.push(
+          '(nome_oficial LIKE ? OR endereco LIKE ? OR bairro LIKE ? OR municipio LIKE ? OR cnes LIKE ?)'
+        );
+        values.push(t, t, t, t, t);
+      }
+
+      const sql = `SELECT * FROM ubs WHERE ${conditions.join(' AND ')} LIMIT ?`;
+      const rows = this.db.prepare(sql).all(...values, limit) as Record<string, unknown>[];
+      const items = rows.map((r) => this.mapRowToUbs(r));
+
+      return { items, mode: 'FILTRO_TEXTUAL' };
+    }
+
+    // 3. Bounding Box da Janela Visível do Mapa (Pan / Zoom)
+    if (minLat !== undefined && maxLat !== undefined && minLon !== undefined && maxLon !== undefined) {
+      const latSpan = Math.abs(maxLat - minLat);
+      const lonSpan = Math.abs(maxLon - minLon);
+
+      // Se a janela cobrir quase o país inteiro (zoom 1 a 4), retorna a visão nacional distribuída
+      if (latSpan > 18 || lonSpan > 22) {
+        return { items: this.getNationalOverview(), mode: 'NACIONAL_DISTRIBUIDO' };
+      }
+
+      const sql = `
+        SELECT * FROM ubs 
+        WHERE latitude BETWEEN ? AND ? 
+          AND longitude BETWEEN ? AND ?
+        LIMIT ?
+      `;
+      const rows = this.db.prepare(sql).all(minLat, maxLat, minLon, maxLon, limit) as Record<string, unknown>[];
+      const items = rows.map((r) => this.mapRowToUbs(r));
+
+      return { items, mode: 'BOUNDING_BOX' };
+    }
+
+    // 4. Padrão inicial: Visão Nacional Distribuída (todos os 27 estados representados)
+    return { items: this.getNationalOverview(), mode: 'NACIONAL_DISTRIBUIDO' };
+  }
+
+  private getNationalOverview(): IUbs[] {
+    if (this.nationalOverviewCache && this.nationalOverviewCache.length > 0) {
+      return this.nationalOverviewCache;
+    }
+
+    const sql = `
+      WITH Ranked AS (
+        SELECT *, ROW_NUMBER() OVER(PARTITION BY uf ORDER BY id) as rn
+        FROM ubs
+        WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+      )
+      SELECT * FROM Ranked
+      WHERE rn <= 6
+      ORDER BY uf, rn
+    `;
+    const rows = this.db.prepare(sql).all() as Record<string, unknown>[];
+    this.nationalOverviewCache = rows.map((r) => this.mapRowToUbs(r));
+    return this.nationalOverviewCache;
   }
 
   private mapRowToUbs(row: Record<string, unknown>): IUbs {

@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { IUbs } from '../types/ubs';
-import { Navigation, ExternalLink, MapPin } from 'lucide-react';
+import { Navigation, ExternalLink, MapPin, Phone } from 'lucide-react';
 
 interface UbsMapProps {
   ubsList: IUbs[];
@@ -11,6 +11,8 @@ interface UbsMapProps {
   selectedUbsId: string | null;
   onSelectUbs: (id: string) => void;
   isDarkMode: boolean;
+  hasActiveFilter?: boolean;
+  onViewportChange?: (bounds: { minLat: number; maxLat: number; minLon: number; maxLon: number; zoom: number }) => void;
 }
 
 // Ícones Customizados em SVG do Leaflet
@@ -19,19 +21,19 @@ const createUbsIcon = (isSelected: boolean) =>
     className: 'custom-leaflet-marker',
     html: `
       <div style="
-        width: ${isSelected ? '36px' : '28px'};
-        height: ${isSelected ? '36px' : '28px'};
+        width: ${isSelected ? '38px' : '28px'};
+        height: ${isSelected ? '38px' : '28px'};
         background: ${isSelected ? '#047857' : '#059669'};
-        border: 2px solid #ffffff;
+        border: ${isSelected ? '3px solid #ffffff' : '2px solid #ffffff'};
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        box-shadow: ${isSelected ? '0 0 0 3px rgba(5, 150, 105, 0.4), 0 6px 14px rgba(0,0,0,0.35)' : '0 3px 8px rgba(0,0,0,0.25)'};
         transform: translate(-50%, -50%);
-        transition: all 0.2s ease;
+        transition: all 0.25s ease;
       ">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="${isSelected ? '20' : '16'}" height="${isSelected ? '20' : '16'}" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
@@ -65,7 +67,8 @@ const MapController: React.FC<{
   userLon: number | null;
   selectedUbs: IUbs | null;
   ubsList: IUbs[];
-}> = ({ userLat, userLon, selectedUbs, ubsList }) => {
+  hasActiveFilter?: boolean;
+}> = ({ userLat, userLon, selectedUbs, ubsList, hasActiveFilter }) => {
   const map = useMap();
 
   // Recalcula o tamanho do mapa sempre que o container mudar (ex.: recolher a barra lateral)
@@ -81,7 +84,8 @@ const MapController: React.FC<{
       map.flyTo([selectedUbs.latitude, selectedUbs.longitude], 15, { duration: 1 });
     } else if (userLat !== null && userLon !== null) {
       map.flyTo([userLat, userLon], 14, { duration: 1.2 });
-    } else if (ubsList.length > 0) {
+    } else if (hasActiveFilter && ubsList.length > 0) {
+      // Ajusta os limites apenas quando houver filtro ativo de busca (cidade, termo, UF ou GPS)
       const validCoords = ubsList.filter((u) => u.latitude && u.longitude);
       if (validCoords.length > 0) {
         const bounds = L.latLngBounds(
@@ -90,8 +94,29 @@ const MapController: React.FC<{
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
       }
     }
-  }, [userLat, userLon, selectedUbs, ubsList, map]);
+  }, [userLat, userLon, selectedUbs, ubsList, hasActiveFilter, map]);
 
+  return null;
+};
+
+// Observador de movimentação da janela do mapa (pan/zoom) para busca dinâmica
+const MapViewportWatcher: React.FC<{
+  onViewportChange?: (bounds: { minLat: number; maxLat: number; minLon: number; maxLon: number; zoom: number }) => void;
+  enabled: boolean;
+}> = ({ onViewportChange, enabled }) => {
+  const map = useMapEvents({
+    moveend: () => {
+      if (!enabled || !onViewportChange) return;
+      const b = map.getBounds();
+      onViewportChange({
+        minLat: b.getSouth(),
+        maxLat: b.getNorth(),
+        minLon: b.getWest(),
+        maxLon: b.getEast(),
+        zoom: map.getZoom(),
+      });
+    },
+  });
   return null;
 };
 
@@ -102,11 +127,13 @@ export const UbsMap: React.FC<UbsMapProps> = ({
   selectedUbsId,
   onSelectUbs,
   isDarkMode,
+  hasActiveFilter = false,
+  onViewportChange,
 }) => {
-  // Ponto central padrão: Brasil (ou São Paulo como fallback)
+  // Ponto central padrão: Centro geográfico do Brasil (para visualização de abrangência nacional)
   const defaultCenter: [number, number] = userLat && userLon
     ? [userLat, userLon]
-    : [-15.7938, -47.8827]; // Brasília
+    : [-14.235, -51.9253];
 
   const defaultZoom = userLat && userLon ? 13 : 4;
 
@@ -135,6 +162,12 @@ export const UbsMap: React.FC<UbsMapProps> = ({
           userLon={userLon}
           selectedUbs={selectedUbs}
           ubsList={ubsList}
+          hasActiveFilter={hasActiveFilter}
+        />
+
+        <MapViewportWatcher
+          onViewportChange={onViewportChange}
+          enabled={!hasActiveFilter}
         />
 
         {/* Marcador da Localização do Usuário (se consentida) */}
@@ -164,29 +197,59 @@ export const UbsMap: React.FC<UbsMapProps> = ({
               }}
             >
               <Popup>
-                <div className="text-xs p-1 space-y-1.5 max-w-xs">
-                  <span className="font-bold text-emerald-700 block text-sm">
-                    {ubs.nomeOficial}
-                  </span>
-                  <div className="flex items-start gap-1 text-slate-600">
-                    <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                    <span>{ubs.endereco}, {ubs.numero || 'S/N'} - {ubs.municipio}/{ubs.uf}</span>
+                <div className="text-xs p-1 space-y-2 max-w-xs">
+                  <div>
+                    <span className="inline-block text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 mb-1">
+                      {ubs.tipoEstabelecimento}
+                    </span>
+                    <span className="font-bold text-emerald-800 dark:text-emerald-300 block text-sm leading-snug">
+                      {ubs.nomeOficial}
+                    </span>
+                    {ubs.cnes && (
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        CNES: {ubs.cnes}
+                      </span>
+                    )}
                   </div>
-                  {ubs.distanciaKm !== undefined && (
-                    <div className="text-emerald-800 font-semibold flex items-center gap-1">
-                      <Navigation className="w-3 h-3" />
-                      <span>{ubs.distanciaKm} km de você</span>
+
+                  <div className="flex items-start gap-1 text-slate-600 dark:text-slate-300">
+                    <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-600" />
+                    <span>
+                      {ubs.endereco}{ubs.numero ? `, ${ubs.numero}` : ''} - {ubs.municipio}/{ubs.uf}
+                    </span>
+                  </div>
+
+                  {ubs.telefone && (
+                    <div className="flex items-center gap-1 text-slate-600 dark:text-slate-300">
+                      <Phone className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                      <span>{ubs.telefone}</span>
                     </div>
                   )}
+
+                  {ubs.distanciaKm !== undefined && (
+                    <div className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                      <Navigation className="w-3 h-3" />
+                      <span>{ubs.distanciaKm} km de distância</span>
+                    </div>
+                  )}
+
                   {ubs.rotasExternas && (
-                    <div className="pt-2 flex items-center gap-2 border-t border-slate-200">
+                    <div className="pt-2 flex items-center gap-3 border-t border-slate-200 dark:border-slate-700">
                       <a
                         href={ubs.rotasExternas.googleMaps}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-emerald-700 hover:underline font-medium flex items-center gap-1"
+                        className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 font-medium flex items-center gap-1"
                       >
                         Google Maps <ExternalLink className="w-3 h-3" />
+                      </a>
+                      <a
+                        href={ubs.rotasExternas.waze}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 font-medium flex items-center gap-1"
+                      >
+                        Waze <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
                   )}

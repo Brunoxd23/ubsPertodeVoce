@@ -107,4 +107,46 @@ describe('API REST - Testes de Integração e Segurança (Fastify Endpoints)', (
     expect(res.headers['x-content-type-options']).toBe('nosniff');
     expect(res.headers['x-frame-options']).toBe('SAMEORIGIN');
   });
+
+  it('GET /api/v1/ubs/map - deve retornar amostragem nacional balanceada em todos os estados quando sem filtros', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/ubs/map',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.sucesso).toBe(true);
+    expect(body.metadados.modo).toBe('NACIONAL_DISTRIBUIDO');
+    expect(body.dados.length).toBeGreaterThan(50);
+
+    // Deve cobrir diversos estados do Brasil (Norte, Nordeste, Centro-Oeste, Sudeste, Sul)
+    const ufs = new Set(body.dados.map((d: any) => d.uf));
+    expect(ufs.size).toBeGreaterThanOrEqual(20);
+    expect(ufs.has('SP')).toBe(true);
+    expect(ufs.has('RJ')).toBe(true);
+    expect(ufs.has('MG')).toBe(true);
+    expect(ufs.has('BA')).toBe(true);
+    expect(ufs.has('RS')).toBe(true);
+  });
+
+  it('GET /api/v1/ubs/map - deve retornar marcadores dentro do bounding box da viewport', async () => {
+    // Região Metropolitana de São Paulo
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/ubs/map?minLat=-23.7&maxLat=-23.4&minLon=-46.8&maxLon=-46.4&limit=50',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.sucesso).toBe(true);
+    expect(body.metadados.modo).toBe('BOUNDING_BOX');
+    expect(body.dados.length).toBeGreaterThan(0);
+    body.dados.forEach((d: any) => {
+      expect(d.latitude).toBeGreaterThanOrEqual(-23.7);
+      expect(d.latitude).toBeLessThanOrEqual(-23.4);
+      expect(d.longitude).toBeGreaterThanOrEqual(-46.8);
+      expect(d.longitude).toBeLessThanOrEqual(-46.4);
+    });
+  });
 });
