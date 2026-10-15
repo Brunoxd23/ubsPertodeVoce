@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "API REST para localização de Unidades Básicas de Saúde com PostGIS e Fastify",
   "main": "dist/server.js",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",

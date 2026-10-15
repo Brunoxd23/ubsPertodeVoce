@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile para Backend Fastify Node.js (Segurança: non-root)
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /usr/src/app
 
@@ -12,7 +12,7 @@ COPY src/ ./src/
 RUN npm run build
 RUN npm prune --production
 
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
@@ -24,6 +24,7 @@ COPY --chown=node:node package*.json ./
 COPY --chown=node:node --from=builder /usr/src/app/node_modules ./node_modules
 COPY --chown=node:node --from=builder /usr/src/app/dist ./dist
 COPY --chown=node:node src/db/migrations ./src/db/migrations
+COPY --chown=node:node data ./data
 
 EXPOSE 3333
 

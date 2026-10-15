@@ -17,6 +17,9 @@ function resolveNationalDbPath(): string | null {
     path.resolve(process.cwd(), 'backend', 'data', 'ubs_nacional.db'),
     path.resolve('data', 'ubs_nacional.db'),
     path.resolve('backend', 'data', 'ubs_nacional.db'),
+    // Relativo ao arquivo compilado em dist/db ou src/db:
+    path.resolve(__dirname, '..', '..', 'data', 'ubs_nacional.db'),
+    path.resolve(__dirname, '..', '..', '..', 'data', 'ubs_nacional.db'),
   ];
 
   for (const p of possiblePaths) {

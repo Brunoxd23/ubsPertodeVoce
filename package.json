@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Plataforma Nacional de Localização de Unidades Básicas de Saúde (UBS)",
   "private": true,
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
