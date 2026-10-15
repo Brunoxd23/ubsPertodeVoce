@@ -51,8 +51,15 @@ export function buildApp() {
   const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim());
   app.register(cors, {
     origin: (origin, cb) => {
-      // Permite requisições sem origin (como curl/Postman e mobile apps nativos) ou as origens cadastradas
-      if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      // Permite requisições sem origin, origens cadastradas, Vercel ou localhost
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        allowedOrigins.includes('*') ||
+        origin.endsWith('.vercel.app') ||
+        origin.includes('localhost') ||
+        origin.includes('127.0.0.1')
+      ) {
         cb(null, true);
         return;
       }
