@@ -1,6 +1,7 @@
 import { IUbsRepository, UbsSearchParams } from '../../db/database-adapter.js';
 import { IUbsWithDistance } from './ubs.entity.js';
 import { NotFoundError } from '../../core/errors/app-error.js';
+import { OsmLiveProvider } from '../importer/osm-live-provider.js';
 
 export class UbsService {
   constructor(private ubsRepository: IUbsRepository) {}
@@ -15,10 +16,39 @@ export class UbsService {
   }
 
   public async searchUbs(params: UbsSearchParams) {
-    const result = await this.ubsRepository.search(params);
+    let result = await this.ubsRepository.search(params);
+
+    // Cobertura Nacional Dinâmica:
+    // 1. Se o usuário estiver buscando por coordenadas e o banco local tiver poucos resultados na região (< 4),
+    // consulta a Overpass API em tempo real, armazena no banco local e atualiza os resultados.
+    if (params.lat !== undefined && params.lon !== undefined && result.total < 4) {
+      try {
+        const liveItems = await OsmLiveProvider.fetchUbsNearCoordinates(
+          params.lat,
+          params.lon,
+          params.raioKm || 5
+        );
+        if (liveItems.length > 0) {
+          await this.ubsRepository.upsertMany(liveItems);
+          result = await this.ubsRepository.search(params);
+        }
+      } catch {
+        // Fallback resiliente: preserva os dados locais sem quebrar
+      }
+    } else if (params.termo && result.total === 0) {
+      // 2. Se o usuário pesquisou por um bairro/cidade não cadastrado localmente, consulta via Nominatim
+      try {
+        const liveByText = await OsmLiveProvider.fetchUbsByText(params.termo);
+        if (liveByText.length > 0) {
+          await this.ubsRepository.upsertMany(liveByText);
+          result = await this.ubsRepository.search(params);
+        }
+      } catch {
+        // Fallback resiliente
+      }
+    }
 
     const enrichedItems = result.items.map((item) => this.enrichWithRouteUrls(item));
-
     const totalPaginas = Math.ceil(result.total / params.limit) || 1;
 
     return {
@@ -37,9 +67,9 @@ export class UbsService {
           cep: params.cep ?? null,
           termo: params.termo ?? null,
         },
-        fonteOficial: 'CNES/DATASUS - Ministério da Saúde',
+        fonteOficial: 'CNES/DATASUS - Ministério da Saúde & Cartografia Digital',
         avisoLegal:
-          'Informações públicas extraídas do CNES/DATASUS. A disponibilidade de especialidades, horários de funcionamento e vacinas deve ser confirmada diretamente com a unidade antes do deslocamento.',
+          'Informações públicas extraídas do CNES/DATASUS e cartografia oficial OpenStreetMap. A disponibilidade de especialidades, horários de funcionamento e vacinas deve ser confirmada diretamente com a unidade antes do deslocamento.',
       },
       dados: enrichedItems,
     };
