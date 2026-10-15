@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
     "import:cnes": "tsx src/modules/importer/cli-import.ts",
+    "setup:national": "tsx src/db/import-national-dataset.ts",
     "seed": "tsx src/db/seed.ts"
   },
   "dependencies": {

@@ -2,6 +2,15 @@ import pg from 'pg';
 import { IUbs } from '../modules/ubs/ubs.entity.js';
 import { env } from '../config/env.js';
 
+let DatabaseSync: any;
+try {
+  // Carrega o módulo nativo do Node sem interferência de bundlers do Vitest
+  const dynamicRequire = eval('require');
+  DatabaseSync = dynamicRequire('node:sqlite').DatabaseSync;
+} catch {
+  // node:sqlite não disponível neste ambiente
+}
+
 export interface UbsSearchParams {
   lat?: number;
   lon?: number;
@@ -365,3 +374,174 @@ export class InMemoryUbsRepository implements IUbsRepository {
     return { inserted, updated };
   }
 }
+
+// -----------------------------------------------------------------------------------
+// Adaptador 3: Repositório SQLite com as 48.000+ Unidades de Todo o Brasil
+// -----------------------------------------------------------------------------------
+export class SqliteNationalUbsRepository implements IUbsRepository {
+  private db: any;
+
+  constructor(dbPath: string) {
+    if (!DatabaseSync) {
+      throw new Error('node:sqlite não suportado neste ambiente.');
+    }
+    this.db = new DatabaseSync(dbPath);
+  }
+
+  public async count(): Promise<number> {
+    const row = this.db.prepare('SELECT COUNT(*) as count FROM ubs').get() as { count: number };
+    return row.count;
+  }
+
+  public async findByIdOrCnes(idOrCnes: string): Promise<IUbs | null> {
+    const padded = idOrCnes.padStart(7, '0');
+    const unpadded = idOrCnes.replace(/^0+/, '');
+    const row = this.db
+      .prepare('SELECT * FROM ubs WHERE id = ? OR cnes = ? OR cnes = ? OR cnes = ? LIMIT 1')
+      .get(idOrCnes, idOrCnes, padded, unpadded) as Record<string, unknown> | undefined;
+
+    if (!row) return null;
+    return this.mapRowToUbs(row);
+  }
+
+  public async search(params: UbsSearchParams): Promise<UbsSearchResult> {
+    const { lat, lon, raioKm = 5, municipio, uf, bairro, cep, termo, page, limit } = params;
+
+    const conditions: string[] = [];
+    const values: unknown[] = [];
+
+    // Bounding Box para aproveitamento de índice espacial em B-Tree no SQLite
+    if (lat !== undefined && lon !== undefined) {
+      const deltaLat = (raioKm + 2) / 111.0;
+      const deltaLon = (raioKm + 2) / (111.0 * Math.cos((lat * Math.PI) / 180));
+
+      conditions.push('latitude BETWEEN ? AND ?');
+      values.push(lat - deltaLat, lat + deltaLat);
+
+      conditions.push('longitude BETWEEN ? AND ?');
+      values.push(lon - deltaLon, lon + deltaLon);
+    }
+
+    if (uf) {
+      conditions.push('uf = ?');
+      values.push(uf.toUpperCase());
+    }
+
+    if (municipio) {
+      conditions.push('municipio LIKE ?');
+      values.push(`%${municipio.toUpperCase()}%`);
+    }
+
+    if (bairro) {
+      conditions.push('bairro LIKE ?');
+      values.push(`%${bairro.toUpperCase()}%`);
+    }
+
+    if (cep) {
+      const cleanCep = cep.replace(/\D/g, '');
+      conditions.push('cep LIKE ?');
+      values.push(`%${cleanCep}%`);
+    }
+
+    if (termo) {
+      const t = `%${termo.toUpperCase().trim()}%`;
+      conditions.push(
+        '(nome_oficial LIKE ? OR endereco LIKE ? OR bairro LIKE ? OR municipio LIKE ? OR cnes LIKE ?)'
+      );
+      values.push(t, t, t, t, t);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const sql = `SELECT * FROM ubs ${whereClause}`;
+    const rows = this.db.prepare(sql).all(...values) as Record<string, unknown>[];
+
+    let items: (IUbs & { distanciaKm?: number })[] = rows.map((r) => this.mapRowToUbs(r));
+
+    if (lat !== undefined && lon !== undefined) {
+      items = items
+        .filter((i) => i.latitude !== null && i.longitude !== null)
+        .map((i) => ({
+          ...i,
+          distanciaKm: calcularHaversineKm(lat, lon, i.latitude!, i.longitude!),
+        }))
+        .filter((i) => i.distanciaKm <= raioKm)
+        .sort((a, b) => a.distanciaKm - b.distanciaKm);
+    } else {
+      items.sort((a, b) => a.nomeOficial.localeCompare(b.nomeOficial));
+    }
+
+    const total = items.length;
+    const offset = (page - 1) * limit;
+    const paginatedItems = items.slice(offset, offset + limit);
+
+    return {
+      items: paginatedItems,
+      total,
+    };
+  }
+
+  public async upsertMany(items: IUbs[]): Promise<{ inserted: number; updated: number }> {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO ubs (
+        id, cnes, nome_oficial, nome_fantasia, tipo_estabelecimento,
+        endereco, numero, complemento, bairro, municipio, uf, cep,
+        telefone, latitude, longitude, fonte_dados, data_atualizacao_fonte,
+        data_ultima_importacao, status_validacao
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    let count = 0;
+    this.db.exec('BEGIN TRANSACTION');
+    for (const item of items) {
+      stmt.run(
+        item.id,
+        item.cnes,
+        item.nomeOficial,
+        item.nomeFantasia,
+        item.tipoEstabelecimento,
+        item.endereco,
+        item.numero,
+        item.complemento,
+        item.bairro,
+        item.municipio,
+        item.uf,
+        item.cep,
+        item.telefone,
+        item.latitude,
+        item.longitude,
+        item.fonteDados,
+        item.dataAtualizacaoFonte,
+        item.dataUltimaImportacao,
+        item.statusValidacao
+      );
+      count++;
+    }
+    this.db.exec('COMMIT');
+    return { inserted: count, updated: 0 };
+  }
+
+  private mapRowToUbs(row: Record<string, unknown>): IUbs {
+    return {
+      id: String(row.id),
+      cnes: row.cnes ? String(row.cnes) : null,
+      nomeOficial: String(row.nome_oficial),
+      nomeFantasia: row.nome_fantasia ? String(row.nome_fantasia) : null,
+      tipoEstabelecimento: String(row.tipo_estabelecimento),
+      endereco: String(row.endereco),
+      numero: row.numero ? String(row.numero) : null,
+      complemento: row.complemento ? String(row.complemento) : null,
+      bairro: row.bairro ? String(row.bairro) : null,
+      municipio: String(row.municipio),
+      uf: String(row.uf),
+      cep: row.cep ? String(row.cep) : null,
+      telefone: row.telefone ? String(row.telefone) : null,
+      latitude: typeof row.latitude === 'number' ? row.latitude : null,
+      longitude: typeof row.longitude === 'number' ? row.longitude : null,
+      fonteDados: String(row.fonte_dados),
+      dataAtualizacaoFonte: row.data_atualizacao_fonte ? String(row.data_atualizacao_fonte) : null,
+      dataUltimaImportacao: String(row.data_ultima_importacao),
+      statusValidacao: (row.status_validacao as any) || 'VALIDA',
+    };
+  }
+}
+
