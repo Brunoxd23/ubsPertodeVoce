@@ -46,45 +46,63 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     setGeoError(null);
     setCepError(null);
 
-    if (!('geolocation' in navigator)) {
-      setGeoError('Geolocalização não é suportada pelo seu navegador atual.');
-      return;
-    }
-
-    setIsLocating(true);
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setIsLocating(false);
-        onFilterChange({
-          userLat: position.coords.latitude,
-          userLon: position.coords.longitude,
-          cepOrigem: null,
-          page: 1,
-        });
-      },
-      (error) => {
-        setIsLocating(false);
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            setGeoError('Permissão de GPS negada. Digite seu CEP no campo abaixo para localizar a UBS mais próxima!');
-            break;
-          case error.POSITION_UNAVAILABLE:
-            setGeoError('Sinal de GPS indisponível no momento. Digite seu CEP no campo abaixo.');
-            break;
-          case error.TIMEOUT:
-            setGeoError('Tempo limite excedido ao obter localização. Tente novamente ou use seu CEP.');
-            break;
-          default:
-            setGeoError('Não foi possível obter a sua localização GPS.');
-        }
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000,
+    try {
+      if (!('geolocation' in navigator) || !navigator.geolocation) {
+        setGeoError('Geolocalização não é suportada pelo seu navegador atual. Digite seu CEP para buscar!');
+        return;
       }
-    );
+
+      setIsLocating(true);
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setIsLocating(false);
+          if (!position || !position.coords) {
+            setGeoError('Não foi possível obter coordenadas válidas. Tente usar a busca por CEP.');
+            return;
+          }
+
+          const lat = Number(position.coords.latitude);
+          const lon = Number(position.coords.longitude);
+
+          if (isNaN(lat) || isNaN(lon)) {
+            setGeoError('Coordenadas recebidas são inválidas. Use seu CEP.');
+            return;
+          }
+
+          onFilterChange({
+            userLat: lat,
+            userLon: lon,
+            cepOrigem: null,
+            page: 1,
+          });
+        },
+        (error) => {
+          setIsLocating(false);
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              setGeoError('Permissão de localização negada no celular. Digite seu CEP no campo abaixo!');
+              break;
+            case error.POSITION_UNAVAILABLE:
+              setGeoError('Sinal de GPS indisponível no momento. Digite seu CEP no campo abaixo.');
+              break;
+            case error.TIMEOUT:
+              setGeoError('Tempo limite excedido ao obter localização. Tente novamente ou use seu CEP.');
+              break;
+            default:
+              setGeoError('Não foi possível obter a sua localização GPS.');
+          }
+        },
+        {
+          enableHighAccuracy: false, // Muito mais rápido e estável em celulares (evita timeout de hardware GPS)
+          timeout: 12000,
+          maximumAge: 60000,
+        }
+      );
+    } catch {
+      setIsLocating(false);
+      setGeoError('Falha ao inicializar o serviço de GPS no dispositivo. Digite seu CEP para buscar!');
+    }
   };
 
   const handleSearchCep = async (e?: React.FormEvent) => {

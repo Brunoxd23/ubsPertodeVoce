@@ -147,7 +147,7 @@ const createGoogleUserLocationIcon = () =>
     popupAnchor: [0, -11],
   });
 
-// Componente para recentralizar o mapa suavemente
+// Componente para recentralizar o mapa suavemente (com proteção para telas mobile e elementos ocultos)
 const MapController: React.FC<{
   userLat: number | null;
   userLon: number | null;
@@ -158,25 +158,66 @@ const MapController: React.FC<{
   const map = useMap();
 
   useEffect(() => {
-    const container = map.getContainer();
-    const observer = new ResizeObserver(() => map.invalidateSize());
-    observer.observe(container);
-    return () => observer.disconnect();
+    try {
+      const container = map.getContainer();
+      if (!container) return;
+      const observer = new ResizeObserver(() => {
+        try {
+          if (container.clientWidth > 0 && container.clientHeight > 0) {
+            map.invalidateSize();
+          }
+        } catch {}
+      });
+      observer.observe(container);
+      return () => observer.disconnect();
+    } catch {}
   }, [map]);
 
   useEffect(() => {
-    if (selectedUbs && selectedUbs.latitude && selectedUbs.longitude) {
-      map.flyTo([selectedUbs.latitude, selectedUbs.longitude], 15, { duration: 1 });
-    } else if (userLat !== null && userLon !== null) {
-      map.flyTo([userLat, userLon], 14, { duration: 1.2 });
-    } else if (hasActiveFilter && ubsList.length > 0) {
-      const validCoords = ubsList.filter((u) => u.latitude && u.longitude);
-      if (validCoords.length > 0) {
-        const bounds = L.latLngBounds(
-          validCoords.map((u) => [u.latitude!, u.longitude!] as [number, number])
-        );
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+    try {
+      const container = map.getContainer();
+      // Em celulares, se a aba atual for Lista, o container do mapa tem tamanho 0 (display: none).
+      // Disparar flyTo ou fitBounds em um container de tamanho 0 causa divisão por zero no Leaflet e tela branca!
+      if (!container || container.clientWidth === 0 || container.clientHeight === 0) {
+        return;
       }
+
+      map.invalidateSize();
+
+      if (
+        selectedUbs &&
+        typeof selectedUbs.latitude === 'number' &&
+        !isNaN(selectedUbs.latitude) &&
+        typeof selectedUbs.longitude === 'number' &&
+        !isNaN(selectedUbs.longitude)
+      ) {
+        map.flyTo([selectedUbs.latitude, selectedUbs.longitude], 15, { duration: 1 });
+      } else if (
+        typeof userLat === 'number' &&
+        !isNaN(userLat) &&
+        typeof userLon === 'number' &&
+        !isNaN(userLon)
+      ) {
+        map.flyTo([userLat, userLon], 14, { duration: 1.2 });
+      } else if (hasActiveFilter && ubsList.length > 0) {
+        const validCoords = ubsList.filter(
+          (u) =>
+            typeof u.latitude === 'number' &&
+            !isNaN(u.latitude) &&
+            typeof u.longitude === 'number' &&
+            !isNaN(u.longitude)
+        );
+        if (validCoords.length > 0) {
+          const bounds = L.latLngBounds(
+            validCoords.map((u) => [u.latitude!, u.longitude!] as [number, number])
+          );
+          if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Animação do mapa ignorada com segurança:', err);
     }
   }, [userLat, userLon, selectedUbs, ubsList, hasActiveFilter, map]);
 
@@ -190,15 +231,20 @@ const MapViewportWatcher: React.FC<{
 }> = ({ onViewportChange, enabled }) => {
   const map = useMapEvents({
     moveend: () => {
-      if (!enabled || !onViewportChange) return;
-      const b = map.getBounds();
-      onViewportChange({
-        minLat: b.getSouth(),
-        maxLat: b.getNorth(),
-        minLon: b.getWest(),
-        maxLon: b.getEast(),
-        zoom: map.getZoom(),
-      });
+      try {
+        if (!enabled || !onViewportChange) return;
+        const container = map.getContainer();
+        if (!container || container.clientWidth === 0 || container.clientHeight === 0) return;
+        const b = map.getBounds();
+        if (!b.isValid()) return;
+        onViewportChange({
+          minLat: b.getSouth(),
+          maxLat: b.getNorth(),
+          minLon: b.getWest(),
+          maxLon: b.getEast(),
+          zoom: map.getZoom(),
+        });
+      } catch {}
     },
   });
   return null;
@@ -433,20 +479,31 @@ export const UbsMap: React.FC<UbsMapProps> = ({
         )}
 
         {/* Marcador da Localização do Usuário (se consentida via GPS direto, sem CEP) */}
-        {!cepOrigem && userLat !== null && userLon !== null && (
-          <Marker position={[userLat, userLon]} icon={createGoogleUserLocationIcon()}>
-            <Popup>
-              <div className="text-xs p-1 font-sans">
-                <span className="font-bold text-blue-600 block text-sm">Sua Localização GPS</span>
-                <span className="text-slate-500">Coordenadas obtidas via navegador com seu consentimento.</span>
-              </div>
-            </Popup>
-          </Marker>
-        )}
+        {!cepOrigem &&
+          typeof userLat === 'number' &&
+          !isNaN(userLat) &&
+          typeof userLon === 'number' &&
+          !isNaN(userLon) && (
+            <Marker position={[userLat, userLon]} icon={createGoogleUserLocationIcon()}>
+              <Popup>
+                <div className="text-xs p-1 font-sans">
+                  <span className="font-bold text-blue-600 block text-sm">Sua Localização GPS</span>
+                  <span className="text-slate-500">Coordenadas obtidas via navegador com seu consentimento.</span>
+                </div>
+              </Popup>
+            </Marker>
+          )}
 
         {/* Marcadores das UBS cadastradas com Pin Oficial Google Maps */}
         {ubsList.map((ubs) => {
-          if (!ubs.latitude || !ubs.longitude) return null;
+          if (
+            typeof ubs.latitude !== 'number' ||
+            isNaN(ubs.latitude) ||
+            typeof ubs.longitude !== 'number' ||
+            isNaN(ubs.longitude)
+          ) {
+            return null;
+          }
           const isSelected = ubs.id === selectedUbsId;
 
           return (
