@@ -36,12 +36,16 @@ export async function getUbsRepository(): Promise<IUbsRepository> {
   if (env.USE_EMBEDDED_DB) {
     const nationalDbPath = resolveNationalDbPath();
     if (nationalDbPath) {
-      console.log(`🇧🇷 [DB] Base Nacional Completa Ativa: ${nationalDbPath}`);
-      const sqliteRepo = new SqliteNationalUbsRepository(nationalDbPath);
-      const total = await sqliteRepo.count();
-      console.log(`✅ [DB] Total de ${total} Unidades Básicas de Saúde do Brasil carregadas e indexadas!`);
-      ubsRepositoryInstance = sqliteRepo;
-      return ubsRepositoryInstance;
+      try {
+        console.log(`🇧🇷 [DB] Base Nacional Completa Ativa: ${nationalDbPath}`);
+        const sqliteRepo = new SqliteNationalUbsRepository(nationalDbPath);
+        const total = await sqliteRepo.count();
+        console.log(`✅ [DB] Total de ${total} Unidades Básicas de Saúde do Brasil carregadas e indexadas!`);
+        ubsRepositoryInstance = sqliteRepo;
+        return ubsRepositoryInstance;
+      } catch (err: any) {
+        console.warn('⚠️ [DB] Base SQLite indisponível ou ambiente sem node:sqlite:', err.message);
+      }
     }
 
     console.log('ℹ️ [DB] Modo Standalone ativo com sementes iniciais.');
@@ -63,10 +67,14 @@ export async function getUbsRepository(): Promise<IUbsRepository> {
     );
     const nationalDbPath = resolveNationalDbPath();
     if (nationalDbPath) {
-      console.log(`🔄 [DB] Ativando fallback para Base Nacional Completa SQLite: ${nationalDbPath}`);
-      const sqliteRepo = new SqliteNationalUbsRepository(nationalDbPath);
-      ubsRepositoryInstance = sqliteRepo;
-      return ubsRepositoryInstance;
+      try {
+        console.log(`🔄 [DB] Ativando fallback para Base Nacional Completa SQLite: ${nationalDbPath}`);
+        const sqliteRepo = new SqliteNationalUbsRepository(nationalDbPath);
+        ubsRepositoryInstance = sqliteRepo;
+        return ubsRepositoryInstance;
+      } catch (err: any) {
+        console.warn('⚠️ [DB] Base SQLite indisponível no fallback:', err.message);
+      }
     }
 
     console.warn('🔄 [DB] Ativando fallback para repositório em memória.');

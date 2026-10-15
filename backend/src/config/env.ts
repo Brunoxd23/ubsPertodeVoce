@@ -12,12 +12,12 @@ const envSchema = z.object({
   RATE_LIMIT_TIME_WINDOW_MS: z.coerce.number().default(60000),
   DATABASE_URL: z.string().default('postgresql://ubs_user:ubs_secure_password@localhost:5432/ubs_db'),
   USE_EMBEDDED_DB: z.preprocess(
-    (val) => val === 'true' || val === true || val === '1',
+    (val) => (val === undefined ? true : val === 'true' || val === true || val === '1'),
     z.boolean().default(true)
   ),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   REDACT_GEOLOCATION_LOGS: z.preprocess(
-    (val) => val === 'true' || val === true || val === '1',
+    (val) => (val === undefined ? true : val === 'true' || val === true || val === '1'),
     z.boolean().default(true)
   ),
 });
