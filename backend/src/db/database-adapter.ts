@@ -121,7 +121,15 @@ export class PostgisUbsRepository implements IUbsRepository {
     }
 
     if (termo) {
-      conditions.push(`(LOWER(nome_oficial) LIKE $${paramIndex} OR LOWER(nome_fantasia) LIKE $${paramIndex} OR LOWER(endereco) LIKE $${paramIndex})`);
+      conditions.push(`(
+        LOWER(nome_oficial) LIKE $${paramIndex} OR 
+        LOWER(nome_fantasia) LIKE $${paramIndex} OR 
+        LOWER(endereco) LIKE $${paramIndex} OR
+        LOWER(bairro) LIKE $${paramIndex} OR
+        LOWER(municipio) LIKE $${paramIndex} OR
+        cep LIKE $${paramIndex} OR
+        cnes LIKE $${paramIndex}
+      )`);
       values.push(`%${termo.toLowerCase()}%`);
       paramIndex += 1;
     }
@@ -293,12 +301,17 @@ export class InMemoryUbsRepository implements IUbsRepository {
     }
 
     if (termo) {
-      const tLower = termo.toLowerCase();
+      const tLower = termo.toLowerCase().trim();
+      const tCleanDigits = tLower.replace(/\D/g, '');
       list = list.filter(
         (i) =>
           i.nomeOficial.toLowerCase().includes(tLower) ||
           (i.nomeFantasia && i.nomeFantasia.toLowerCase().includes(tLower)) ||
-          i.endereco.toLowerCase().includes(tLower)
+          i.endereco.toLowerCase().includes(tLower) ||
+          (i.bairro && i.bairro.toLowerCase().includes(tLower)) ||
+          i.municipio.toLowerCase().includes(tLower) ||
+          (tCleanDigits.length >= 4 && (i.cep || '').includes(tCleanDigits)) ||
+          (i.cnes && i.cnes.includes(tLower))
       );
     }
 

@@ -81,7 +81,30 @@ describe('UbsService - Consultas Geográficas e Regras de Negócio', () => {
     expect(ubs.rotasExternas).toBeDefined();
   });
 
+  it('deve localizar com precisão a UBS Jardim das Margaridas por termo, bairro, rua ou CEP', async () => {
+    // 1. Busca por nome/termo "Margaridas"
+    const buscaNome = await service.searchUbs({ termo: 'Margaridas', page: 1, limit: 10 });
+    expect(buscaNome.dados.length).toBeGreaterThan(0);
+    expect(buscaNome.dados[0].nomeOficial).toBe('UBS JARDIM DAS MARGARIDAS');
+    expect(buscaNome.dados[0].cnes).toBe('2061279');
+
+    // 2. Busca por rua "Paulo Augusto de Andrade"
+    const buscaRua = await service.searchUbs({ termo: 'Paulo Augusto de Andrade', page: 1, limit: 10 });
+    expect(buscaRua.dados.length).toBeGreaterThan(0);
+    expect(buscaRua.dados[0].endereco).toContain('PAULO AUGUSTO DE ANDRADE');
+
+    // 3. Busca por município "Taboão da Serra"
+    const buscaMunicipio = await service.searchUbs({ termo: 'Taboão da Serra', page: 1, limit: 10 });
+    expect(buscaMunicipio.dados.length).toBeGreaterThanOrEqual(9);
+
+    // 4. Busca por CEP "06786-070"
+    const buscaCep = await service.searchUbs({ termo: '06786-070', page: 1, limit: 10 });
+    expect(buscaCep.dados.length).toBeGreaterThan(0);
+    expect(buscaCep.dados[0].cnes).toBe('2061279');
+  });
+
   it('deve lançar NotFoundError ao buscar CNES inexistente', async () => {
     await expect(service.findByIdOrCnes('0000000000')).rejects.toThrow(NotFoundError);
   });
 });
+
