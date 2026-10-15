@@ -57,3 +57,43 @@
   z-index: 9999 !important;
 }
 
+/* Correção de cores de links e botões nos balões (popups) do Leaflet */
+.leaflet-container a {
+  text-decoration: none !important;
+}
+
+.leaflet-popup-content a {
+  text-decoration: none !important;
+}
+
+.leaflet-popup-content a.btn-google-maps {
+  color: #ffffff !important;
+  background-color: #2563eb !important;
+}
+
+.leaflet-popup-content a.btn-google-maps:hover {
+  background-color: #1d4ed8 !important;
+  color: #ffffff !important;
+}
+
+.leaflet-popup-content a.btn-streetview {
+  color: #ffffff !important;
+  background-color: #ea4335 !important;
+}
+
+.leaflet-popup-content a.btn-streetview:hover {
+  background-color: #dc2626 !important;
+  color: #ffffff !important;
+}
+
+.leaflet-popup-content a.btn-waze {
+  color: #334155 !important;
+  background-color: #f1f5f9 !important;
+}
+
+.dark .leaflet-popup-content a.btn-waze {
+  color: #f1f5f9 !important;
+  background-color: #1e293b !important;
+}
+
+

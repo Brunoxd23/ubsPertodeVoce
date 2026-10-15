@@ -11,6 +11,7 @@ import {
   Minus,
   LocateFixed,
   Layers,
+  Camera,
 } from 'lucide-react';
 
 interface UbsMapProps {
@@ -372,22 +373,60 @@ export const UbsMap: React.FC<UbsMapProps> = ({
           onChangeLayer={setCurrentLayer}
         />
 
-        {/* Marcador do CEP Residencial */}
+        {/* Marcador do CEP Residencial com Foto da Rua e Street View */}
         {cepOrigem && (
           <Marker position={[cepOrigem.latitude, cepOrigem.longitude]} icon={createGoogleCepIcon()}>
             <Popup>
-              <div className="text-xs p-1 space-y-1.5 max-w-xs font-sans">
-                <span className="font-bold text-blue-600 block text-sm">
-                  🏠 Seu CEP: {cepOrigem.cep.replace(/(\d{5})(\d{3})/, '$1-$2')}
-                </span>
-                <span className="text-slate-600 dark:text-slate-300 block text-xs">
-                  {cepOrigem.logradouro ? `${cepOrigem.logradouro}, ` : ''}
-                  {cepOrigem.bairro ? `${cepOrigem.bairro} - ` : ''}
-                  {cepOrigem.municipio}/{cepOrigem.uf}
-                </span>
-                <span className="text-[11px] text-slate-400 block pt-1 border-t border-slate-200 dark:border-slate-700">
-                  Ponto de referência para cálculo da UBS mais próxima.
-                </span>
+              <div className="text-xs p-1 space-y-2 max-w-xs font-sans">
+                {/* Foto da Rua / Bairro do CEP */}
+                <div className="relative rounded-xl overflow-hidden h-28 shadow-sm group border border-slate-200 dark:border-slate-700">
+                  <img
+                    src="/assets/images/street-view-cep.jpg"
+                    alt={`Frente da rua para o CEP ${cepOrigem.cep}`}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex items-end p-2 justify-between">
+                    <span className="text-[10px] font-bold text-white flex items-center gap-1 bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-sm">
+                      🏡 Frente do Endereço
+                    </span>
+                    <a
+                      href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${cepOrigem.latitude},${cepOrigem.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-streetview !text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md hover:scale-105 transition"
+                      style={{ color: '#ffffff', backgroundColor: '#ea4335' }}
+                      title="Abrir Google Street View 360° desta rua"
+                    >
+                      <Camera className="w-2.5 h-2.5" />
+                      <span>360° Street View</span>
+                    </a>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="font-bold text-blue-600 dark:text-blue-400 block text-sm">
+                    🏠 Seu CEP: {cepOrigem.cep.replace(/(\d{5})(\d{3})/, '$1-$2')}
+                  </span>
+                  <span className="text-slate-600 dark:text-slate-300 block text-xs mt-0.5">
+                    {cepOrigem.logradouro ? `${cepOrigem.logradouro}, ` : ''}
+                    {cepOrigem.bairro ? `${cepOrigem.bairro} - ` : ''}
+                    {cepOrigem.municipio}/{cepOrigem.uf}
+                  </span>
+                </div>
+
+                <div className="pt-2 flex items-center gap-2 border-t border-slate-200 dark:border-slate-700">
+                  <a
+                    href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${cepOrigem.latitude},${cepOrigem.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-streetview flex-1 py-1.5 px-2 bg-red-600 hover:bg-red-700 !text-white rounded-lg font-bold text-center text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition"
+                    style={{ color: '#ffffff', backgroundColor: '#ea4335' }}
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>Ver Rua no Street View 360°</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
               </div>
             </Popup>
           </Marker>
@@ -422,6 +461,31 @@ export const UbsMap: React.FC<UbsMapProps> = ({
             >
               <Popup>
                 <div className="text-xs p-1 space-y-2 max-w-xs font-sans">
+                  {/* Foto da Fachada Oficial da Unidade Básica de Saúde */}
+                  <div className="relative rounded-xl overflow-hidden h-28 shadow-sm group border border-slate-200 dark:border-slate-700">
+                    <img
+                      src="/assets/images/ubs-facade.jpg"
+                      alt={`Fachada da ${ubs.nomeOficial}`}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex items-end p-2 justify-between">
+                      <span className="text-[10px] font-bold text-white flex items-center gap-1 bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-sm">
+                        🏥 Fachada da Unidade
+                      </span>
+                      <a
+                        href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${ubs.latitude},${ubs.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-streetview !text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md hover:scale-105 transition"
+                        style={{ color: '#ffffff', backgroundColor: '#ea4335' }}
+                        title="Ver a frente da UBS em 360° no Google Street View"
+                      >
+                        <Camera className="w-2.5 h-2.5" />
+                        <span>360° Street View</span>
+                      </a>
+                    </div>
+                  </div>
+
                   <div>
                     <span className="inline-block text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300 mb-1 border border-red-200 dark:border-red-900">
                       {ubs.tipoEstabelecimento}
@@ -457,26 +521,47 @@ export const UbsMap: React.FC<UbsMapProps> = ({
                     </div>
                   )}
 
-                  {ubs.rotasExternas && (
-                    <div className="pt-2 flex items-center gap-2 border-t border-slate-200 dark:border-slate-700">
-                      <a
-                        href={ubs.rotasExternas.googleMaps}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-center text-[11px] flex items-center justify-center gap-1 shadow-sm transition"
-                      >
-                        Google Maps <ExternalLink className="w-3 h-3" />
-                      </a>
-                      <a
-                        href={ubs.rotasExternas.waze}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="py-1.5 px-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg font-semibold text-center text-[11px] flex items-center justify-center gap-1 transition"
-                      >
-                        Waze <ExternalLink className="w-3 h-3" />
-                      </a>
+                  {/* Botões de Ação com Cores e Nomes Corrigidos */}
+                  <div className="pt-2 flex flex-col gap-1.5 border-t border-slate-200 dark:border-slate-700">
+                    {/* Botão Ver Fachada no Street View */}
+                    <a
+                      href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${ubs.latitude},${ubs.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-streetview w-full py-1.5 px-2 bg-red-600 hover:bg-red-700 !text-white rounded-lg font-bold text-center text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition"
+                      style={{ color: '#ffffff', backgroundColor: '#ea4335' }}
+                    >
+                      <Camera className="w-3.5 h-3.5 text-white" />
+                      <span>Ver Fachada no Street View (360°)</span>
+                      <ExternalLink className="w-3 h-3 text-white" />
+                    </a>
+
+                    <div className="flex items-center gap-2">
+                      {ubs.rotasExternas && (
+                        <a
+                          href={ubs.rotasExternas.googleMaps}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-google-maps flex-1 py-1.5 px-2 bg-blue-600 hover:bg-blue-700 !text-white rounded-lg font-bold text-center text-[11px] flex items-center justify-center gap-1 shadow-sm transition"
+                          style={{ color: '#ffffff', backgroundColor: '#2563eb' }}
+                        >
+                          <span>Como Chegar (Google Maps)</span>
+                          <ExternalLink className="w-3 h-3 text-white" />
+                        </a>
+                      )}
+                      {ubs.rotasExternas?.waze && (
+                        <a
+                          href={ubs.rotasExternas.waze}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-waze py-1.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg font-bold text-center text-[11px] flex items-center justify-center gap-1 transition"
+                        >
+                          <span>Waze</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               </Popup>
             </Marker>

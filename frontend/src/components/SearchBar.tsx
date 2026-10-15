@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, MapPin, Navigation, SlidersHorizontal, RotateCcw, AlertCircle, Loader2 } from 'lucide-react';
+import { Search, MapPin, Navigation, SlidersHorizontal, RotateCcw, AlertCircle, Loader2, Camera, ExternalLink } from 'lucide-react';
 import { UbsFilterState } from '../types/ubs';
 import { fetchUbsByCep } from '../services/api';
 
@@ -217,29 +217,54 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         </button>
       </form>
 
-      {/* Banner de CEP ativo */}
+      {/* Banner de CEP ativo com Foto da Rua e Link para Google Street View */}
       {filters.cepOrigem && (
-        <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-xs flex items-start gap-2 shadow-sm animate-in fade-in duration-200">
-          <span className="text-base leading-none mt-0.5">📍</span>
-          <div className="flex-1 min-w-0">
-            <span className="font-bold text-emerald-900 dark:text-emerald-200 block truncate">
-              CEP {filters.cepOrigem.cep.replace(/(\d{5})(\d{3})/, '$1-$2')} ativo
-            </span>
-            <span className="text-emerald-700 dark:text-emerald-300 text-[11px] block truncate">
-              {filters.cepOrigem.logradouro ? `${filters.cepOrigem.logradouro}, ` : ''}
-              {filters.cepOrigem.bairro ? `${filters.cepOrigem.bairro} - ` : ''}
-              {filters.cepOrigem.municipio}/{filters.cepOrigem.uf}
-            </span>
+        <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-xs overflow-hidden shadow-sm animate-in fade-in duration-200">
+          <div className="relative h-20 w-full overflow-hidden">
+            <img
+              src="/assets/images/street-view-cep.jpg"
+              alt={`Foto da rua para o CEP ${filters.cepOrigem.cep}`}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent flex items-end p-2 justify-between">
+              <span className="text-[10px] font-bold text-white flex items-center gap-1 bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-sm">
+                📍 Frente do Endereço
+              </span>
+              <a
+                href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${filters.cepOrigem.latitude},${filters.cepOrigem.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md transition"
+                title="Abrir Street View 360° no Google Maps"
+              >
+                <Camera className="w-2.5 h-2.5" />
+                <span>Street View 360°</span>
+                <ExternalLink className="w-2.5 h-2.5" />
+              </a>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={handleClearLocation}
-            className="text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 font-bold px-1 py-0.5 rounded text-xs"
-            title="Remover localização por CEP"
-            aria-label="Remover localização por CEP"
-          >
-            ✕
-          </button>
+
+          <div className="p-2.5 flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <span className="font-bold text-emerald-900 dark:text-emerald-200 block truncate">
+                CEP {filters.cepOrigem.cep.replace(/(\d{5})(\d{3})/, '$1-$2')} ativo
+              </span>
+              <span className="text-emerald-700 dark:text-emerald-300 text-[11px] block truncate">
+                {filters.cepOrigem.logradouro ? `${filters.cepOrigem.logradouro}, ` : ''}
+                {filters.cepOrigem.bairro ? `${filters.cepOrigem.bairro} - ` : ''}
+                {filters.cepOrigem.municipio}/{filters.cepOrigem.uf}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleClearLocation}
+              className="text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 font-bold px-1.5 py-0.5 rounded text-xs bg-emerald-100 dark:bg-emerald-900/50"
+              title="Remover localização por CEP"
+              aria-label="Remover localização por CEP"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 
