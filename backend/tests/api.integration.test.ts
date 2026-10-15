@@ -173,4 +173,23 @@ describe('API REST - Testes de Integração e Segurança (Fastify Endpoints)', (
     expect(body.dados.length).toBeGreaterThan(0);
     expect(body.dados[0].id).toBe(body.ubsMaisProxima.id);
   });
+
+  it('GET /api/v1/cep/06817-230 - deve resolver Rua Ilha de Marajó em Embu das Artes e retornar UBS Parque Esplanada', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/cep/06817-230?raioKm=5',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.sucesso).toBe(true);
+    expect(body.origemCep.cep).toBe('06817230');
+    expect(body.origemCep.logradouro).toContain('Ilha de Marajó');
+    expect(body.origemCep.municipio).toBe('Embu das Artes');
+
+    // UBS mais próxima deve ser a UBS Parque Esplanada a ~0.1 km (100 metros)
+    expect(body.ubsMaisProxima).toBeDefined();
+    expect(body.ubsMaisProxima.nomeOficial).toContain('ESPLANADA');
+    expect(body.ubsMaisProxima.distanciaKm).toBeLessThan(0.5);
+  });
 });
