@@ -68,6 +68,14 @@ const MapController: React.FC<{
 }> = ({ userLat, userLon, selectedUbs, ubsList }) => {
   const map = useMap();
 
+  // Recalcula o tamanho do mapa sempre que o container mudar (ex.: recolher a barra lateral)
+  useEffect(() => {
+    const container = map.getContainer();
+    const observer = new ResizeObserver(() => map.invalidateSize());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [map]);
+
   useEffect(() => {
     if (selectedUbs && selectedUbs.latitude && selectedUbs.longitude) {
       map.flyTo([selectedUbs.latitude, selectedUbs.longitude], 15, { duration: 1 });
@@ -105,7 +113,7 @@ export const UbsMap: React.FC<UbsMapProps> = ({
   const selectedUbs = ubsList.find((u) => u.id === selectedUbsId) || null;
 
   return (
-    <div className="w-full h-full relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
+    <div className="absolute inset-0 overflow-hidden">
       <MapContainer
         center={defaultCenter}
         zoom={defaultZoom}

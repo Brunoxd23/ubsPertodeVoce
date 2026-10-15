@@ -8,7 +8,7 @@ import { PrivacyModal } from './components/PrivacyModal';
 import { Footer } from './components/Footer';
 import { fetchUbs } from './services/api';
 import { UbsFilterState } from './types/ubs';
-import { Map, List } from 'lucide-react';
+import { Map, List, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,9 +35,10 @@ function MainApplication() {
   const [filters, setFilters] = useState<UbsFilterState>(initialFilters);
   const [selectedUbsId, setSelectedUbsId] = useState<string | null>(null);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
-  const [mobileView, setMobileView] = useState<'split' | 'list' | 'map'>('list');
+  const [mobileView, setMobileView] = useState<'list' | 'map'>('list');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Dark Mode State com persistência
+  // Dark Mode State com persistência (apenas preferência de tema, nenhum dado pessoal)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('theme_preference');
     if (saved) return saved === 'dark';
@@ -60,6 +61,14 @@ function MainApplication() {
     queryFn: () => fetchUbs(filters),
   });
 
+  // Ao selecionar uma UBS (ex.: clicando no marcador), rola a lista até o card correspondente
+  useEffect(() => {
+    if (!selectedUbsId) return;
+    document
+      .getElementById(`ubs-card-${selectedUbsId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [selectedUbsId]);
+
   const handleFilterChange = (newFilters: Partial<UbsFilterState>) => {
     setFilters((prev) => ({
       ...prev,
@@ -72,101 +81,117 @@ function MainApplication() {
     setSelectedUbsId(null);
   };
 
-  const handleSelectUbs = (id: string) => {
-    setSelectedUbsId(id);
-    // No mobile, se selecionou na lista, podemos alternar para o mapa se desejado
-  };
+  const total = data?.metadados.total ?? 0;
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors">
+    <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors">
       <Header
         isDarkMode={isDarkMode}
         onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
         onOpenPrivacy={() => setIsPrivacyOpen(true)}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Barra de Pesquisa e Filtros */}
-        <SearchBar
-          filters={filters}
-          onFilterChange={handleFilterChange}
-          onReset={handleResetFilters}
-          isLoading={isLoading}
-        />
-
+      <main className="flex-1 min-h-0 flex flex-col lg:flex-row">
         {/* Alternador Mobile (Lista vs Mapa) */}
-        <div className="flex lg:hidden bg-slate-200/80 dark:bg-slate-800 p-1 rounded-xl">
-          <button
-            type="button"
-            onClick={() => setMobileView('list')}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition ${
-              mobileView === 'list'
-                ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400'
-            }`}
-          >
-            <List className="w-4 h-4" />
-            Ver Lista ({data?.metadados.total ?? 0})
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobileView('map')}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition ${
-              mobileView === 'map'
-                ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400'
-            }`}
-          >
-            <Map className="w-4 h-4" />
-            Ver Mapa Interativo
-          </button>
+        <div className="lg:hidden shrink-0 p-2 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex bg-slate-200/80 dark:bg-slate-800 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setMobileView('list')}
+              aria-pressed={mobileView === 'list'}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition ${
+                mobileView === 'list'
+                  ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              <List className="w-4 h-4" />
+              Lista ({total.toLocaleString('pt-BR')})
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileView('map')}
+              aria-pressed={mobileView === 'map'}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition ${
+                mobileView === 'map'
+                  ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              <Map className="w-4 h-4" />
+              Mapa
+            </button>
+          </div>
         </div>
 
-        {/* Layout Principal: 2 Colunas no Desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Coluna da Esquerda: Lista de Resultados */}
-          <div
-            className={`lg:col-span-6 space-y-4 ${
-              mobileView === 'map' ? 'hidden lg:block' : 'block'
-            }`}
+        <div className="flex-1 min-h-0 flex">
+          {/* Barra lateral esquerda: busca + lista de UBS (rolagem independente) */}
+          <aside
+            aria-label="Pesquisa e lista de Unidades Básicas de Saúde"
+            className={`${mobileView === 'map' ? 'hidden' : 'flex'} ${
+              isSidebarOpen ? 'lg:flex' : 'lg:hidden'
+            } flex-col w-full lg:w-[400px] xl:w-[430px] shrink-0 bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 min-h-0`}
           >
-            <UbsList
-              data={data}
-              isLoading={isLoading}
-              isError={isError}
-              error={error as Error}
-              selectedUbsId={selectedUbsId}
-              onSelectUbs={handleSelectUbs}
-              page={filters.page}
-              onPageChange={(newPage) => handleFilterChange({ page: newPage })}
-              onRetry={() => refetch()}
-            />
-          </div>
+            <div className="shrink-0 p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+              <SearchBar
+                filters={filters}
+                onFilterChange={handleFilterChange}
+                onReset={handleResetFilters}
+                isLoading={isLoading}
+              />
+            </div>
 
-          {/* Coluna da Direita: Mapa Interativo com Leaflet */}
-          <div
-            className={`lg:col-span-6 lg:sticky lg:top-24 h-[500px] lg:h-[calc(100vh-8rem)] ${
-              mobileView === 'list' ? 'hidden lg:block' : 'block'
-            }`}
+            <div className="flex-1 min-h-0 overflow-y-auto p-3">
+              <UbsList
+                data={data}
+                isLoading={isLoading}
+                isError={isError}
+                error={error as Error}
+                selectedUbsId={selectedUbsId}
+                onSelectUbs={setSelectedUbsId}
+                page={filters.page}
+                onPageChange={(newPage) => handleFilterChange({ page: newPage })}
+                onRetry={() => refetch()}
+              />
+            </div>
+          </aside>
+
+          {/* Mapa: ocupa todo o espaço restante */}
+          <section
+            aria-label="Mapa interativo"
+            className={`${mobileView === 'list' ? 'hidden lg:block' : 'block'} flex-1 min-w-0 relative`}
           >
             <UbsMap
               ubsList={data?.dados || []}
               userLat={filters.userLat}
               userLon={filters.userLon}
               selectedUbsId={selectedUbsId}
-              onSelectUbs={handleSelectUbs}
+              onSelectUbs={setSelectedUbsId}
               isDarkMode={isDarkMode}
             />
-          </div>
+
+            {/* Recolher / expandir a lista (apenas desktop) */}
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen((v) => !v)}
+              className="hidden lg:flex absolute top-3 left-3 z-20 items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              aria-label={isSidebarOpen ? 'Recolher lista de unidades' : 'Expandir lista de unidades'}
+              aria-expanded={isSidebarOpen}
+            >
+              {isSidebarOpen ? (
+                <PanelLeftClose className="w-4 h-4" />
+              ) : (
+                <PanelLeftOpen className="w-4 h-4" />
+              )}
+              {isSidebarOpen ? 'Recolher lista' : `Lista (${total.toLocaleString('pt-BR')})`}
+            </button>
+          </section>
         </div>
       </main>
 
       <Footer onOpenPrivacy={() => setIsPrivacyOpen(true)} />
 
-      <PrivacyModal
-        isOpen={isPrivacyOpen}
-        onClose={() => setIsPrivacyOpen(false)}
-      />
+      <PrivacyModal isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, MapPin, Navigation, SlidersHorizontal, RotateCcw, AlertCircle } from 'lucide-react';
+import { Search, MapPin, Navigation, SlidersHorizontal, RotateCcw, AlertCircle, X } from 'lucide-react';
 import { UbsFilterState } from '../types/ubs';
 
 interface SearchBarProps {
@@ -23,6 +23,9 @@ const RAIOS = [
   { label: '25 km', value: 25 },
   { label: '50 km', value: 50 },
 ];
+
+const inputBase =
+  'w-full py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-sm placeholder-slate-400 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500';
 
 export const SearchBar: React.FC<SearchBarProps> = ({
   filters,
@@ -56,7 +59,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         setIsLocating(false);
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            setGeoError('Permissão de localização não autorizada. Você pode pesquisar digitando o Município, Bairro ou CEP abaixo.');
+            setGeoError('Permissão de localização não autorizada. Você pode pesquisar digitando o Município, Bairro ou CEP.');
             break;
           case error.POSITION_UNAVAILABLE:
             setGeoError('Sinal de GPS indisponível no momento. Tente utilizar a pesquisa manual.');
@@ -77,61 +80,45 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   };
 
   const handleClearLocation = () => {
-    onFilterChange({
-      userLat: null,
-      userLon: null,
-      page: 1,
-    });
+    onFilterChange({ userLat: null, userLon: null, page: 1 });
   };
 
+  const hasLocation = filters.userLat !== null;
+
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 sm:p-5 transition-colors">
-      {/* Botão de Destaque: Geolocalização Voluntária */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100 dark:border-slate-800">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleUseLocation}
-            disabled={isLocating || isLoading}
-            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition shadow-sm ${
-              filters.userLat !== null
-                ? 'bg-emerald-700 text-white hover:bg-emerald-800'
-                : 'bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2'
-            }`}
-            aria-label="Autorizar e usar minha localização geográfica para buscar UBS próximas"
-          >
-            <Navigation className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
-            <span>
-              {isLocating
-                ? 'Obtendo localização...'
-                : filters.userLat !== null
-                ? 'Localização ativa (Atualizar)'
-                : 'Usar minha localização'}
-            </span>
-          </button>
+    <div className="space-y-2.5">
+      {/* Geolocalização voluntária + raio */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleUseLocation}
+          disabled={isLocating || isLoading}
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-medium text-sm transition shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:opacity-70 ${
+            hasLocation ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-emerald-600 hover:bg-emerald-700'
+          }`}
+          aria-label="Autorizar e usar minha localização geográfica para buscar UBS próximas"
+        >
+          <Navigation className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
+          <span className="truncate">
+            {isLocating
+              ? 'Obtendo localização...'
+              : hasLocation
+              ? 'Localização ativa'
+              : 'Usar minha localização'}
+          </span>
+        </button>
 
-          {filters.userLat !== null && (
-            <button
-              type="button"
-              onClick={handleClearLocation}
-              className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline px-2 py-1"
-            >
-              Remover GPS
-            </button>
-          )}
-        </div>
-
-        {/* Seletor de Raio (Ativo quando há GPS ou busca com raio) */}
-        <div className="flex items-center gap-2">
-          <label htmlFor="raio-select" className="text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1">
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            Raio de busca:
+        <div className="flex items-center gap-1.5 shrink-0">
+          <label htmlFor="raio-select" className="sr-only">
+            Raio de busca
           </label>
+          <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
           <select
             id="raio-select"
             value={filters.raioKm}
             onChange={(e) => onFilterChange({ raioKm: Number(e.target.value), page: 1 })}
-            className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-2 font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            title="Raio de busca (usado com a localização)"
           >
             {RAIOS.map((r) => (
               <option key={r.value} value={r.value}>
@@ -142,63 +129,68 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         </div>
       </div>
 
-      {/* Alerta de erro de Geolocalização (se houver) */}
+      {hasLocation && (
+        <button
+          type="button"
+          onClick={handleClearLocation}
+          className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline"
+        >
+          <X className="w-3 h-3" />
+          Remover minha localização
+        </button>
+      )}
+
       {geoError && (
-        <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs flex items-start gap-2">
+        <div
+          role="alert"
+          className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs flex items-start gap-2"
+        >
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-          <div className="flex-1">
-            <span>{geoError}</span>
-          </div>
+          <span className="flex-1">{geoError}</span>
           <button
             type="button"
             onClick={() => setGeoError(null)}
             className="text-amber-700 dark:text-amber-400 font-bold hover:underline"
+            aria-label="Fechar aviso"
           >
             ✕
           </button>
         </div>
       )}
 
-      {/* Formulário de Busca Textual (Município, UF, Bairro, CEP ou Nome) */}
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-        {/* Campo de Termo Livre */}
-        <div className="sm:col-span-6 relative">
-          <label htmlFor="search-termo" className="sr-only">
-            Buscar por nome da UBS, bairro ou endereço
-          </label>
-          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-            <Search className="w-4 h-4" />
-          </div>
-          <input
-            id="search-termo"
-            type="text"
-            value={filters.termo}
-            onChange={(e) => onFilterChange({ termo: e.target.value, page: 1 })}
-            placeholder="Nome da unidade, bairro, endereço ou CEP..."
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-sm placeholder-slate-400 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-        </div>
+      {/* Busca textual */}
+      <div className="relative">
+        <label htmlFor="search-termo" className="sr-only">
+          Buscar por nome da UBS, bairro, endereço ou CEP
+        </label>
+        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <input
+          id="search-termo"
+          type="text"
+          value={filters.termo}
+          onChange={(e) => onFilterChange({ termo: e.target.value, page: 1 })}
+          placeholder="Nome, bairro, endereço ou CEP..."
+          className={`${inputBase} pl-9 pr-3`}
+        />
+      </div>
 
-        {/* Município */}
-        <div className="sm:col-span-3 relative">
+      <div className="grid grid-cols-[1fr_5.5rem_2.25rem] gap-2">
+        <div className="relative">
           <label htmlFor="search-municipio" className="sr-only">
             Município
           </label>
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-            <MapPin className="w-4 h-4" />
-          </div>
+          <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             id="search-municipio"
             type="text"
             value={filters.municipio}
             onChange={(e) => onFilterChange({ municipio: e.target.value, page: 1 })}
             placeholder="Município..."
-            className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-sm placeholder-slate-400 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className={`${inputBase} pl-9 pr-3`}
           />
         </div>
 
-        {/* Seletor de UF */}
-        <div className="sm:col-span-2">
+        <div>
           <label htmlFor="search-uf" className="sr-only">
             Estado (UF)
           </label>
@@ -206,9 +198,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             id="search-uf"
             value={filters.uf}
             onChange={(e) => onFilterChange({ uf: e.target.value, page: 1 })}
-            className="w-full py-2.5 px-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className={`${inputBase} px-2`}
           >
-            <option value="">UF (Todas)</option>
+            <option value="">UF</option>
             {UFS.map((uf) => (
               <option key={uf} value={uf}>
                 {uf}
@@ -217,18 +209,15 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           </select>
         </div>
 
-        {/* Botão Limpar Filtros */}
-        <div className="sm:col-span-1 flex items-center justify-center">
-          <button
-            type="button"
-            onClick={onReset}
-            className="w-full h-full py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center"
-            title="Limpar todos os filtros"
-            aria-label="Limpar todos os filtros de pesquisa"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onReset}
+          className="flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          title="Limpar todos os filtros"
+          aria-label="Limpar todos os filtros de pesquisa"
+        >
+          <RotateCcw className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );

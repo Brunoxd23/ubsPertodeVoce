@@ -31,13 +31,21 @@ export const UbsCard: React.FC<UbsCardProps> = ({ ubs, isSelected, onSelect }) =
 
   return (
     <article
+      id={`ubs-card-${ubs.id}`}
       onClick={onSelect}
-      className={`p-5 rounded-2xl border transition cursor-pointer relative ${
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onSelect?.();
+        }
+      }}
+      tabIndex={0}
+      className={`p-4 rounded-xl border transition cursor-pointer relative focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
         isSelected
           ? 'bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-500 shadow-md ring-2 ring-emerald-500/30'
           : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700/60 hover:shadow-sm'
       }`}
-      aria-label={`Unidade Básica de Saúde: ${ubs.nomeOficial}`}
+      aria-label={`Unidade Básica de Saúde: ${ubs.nomeOficial || 'sem nome cadastrado'}`}
     >
       {/* Top Header: Tipo e Distância */}
       <div className="flex items-start justify-between gap-3 mb-2.5">
@@ -61,8 +69,8 @@ export const UbsCard: React.FC<UbsCardProps> = ({ ubs, isSelected, onSelect }) =
       </div>
 
       {/* Nome da Unidade */}
-      <h3 className="text-base font-bold text-slate-900 dark:text-white leading-snug mb-1">
-        {ubs.nomeOficial}
+      <h3 className="text-sm font-bold text-slate-900 dark:text-white leading-snug mb-1">
+        {ubs.nomeOficial?.trim() || 'Unidade sem nome cadastrado no CNES'}
       </h3>
       {ubs.nomeFantasia && ubs.nomeFantasia !== ubs.nomeOficial && (
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 italic">

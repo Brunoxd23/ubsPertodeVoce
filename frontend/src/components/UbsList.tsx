@@ -84,16 +84,16 @@ export const UbsList: React.FC<UbsListProps> = ({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Resumo dos resultados */}
-      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1">
+      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1" aria-live="polite">
         <span>
-          Encontradas <strong className="text-slate-800 dark:text-slate-200">{meta?.total}</strong> unidade(s)
-          {meta?.raioKm && ` no raio de ${meta.raioKm} km`}
+          <strong className="text-slate-800 dark:text-slate-200">{meta?.total.toLocaleString('pt-BR')}</strong> unidade(s)
+          {meta?.filtrosAplicados.possuiCoordenadas && meta.raioKm ? ` no raio de ${meta.raioKm} km` : ''}
         </span>
         {meta?.totalPaginas && meta.totalPaginas > 1 && (
           <span>
-            Página {meta.pagina} de {meta.totalPaginas}
+            Página {meta.pagina} de {meta.totalPaginas.toLocaleString('pt-BR')}
           </span>
         )}
       </div>
@@ -112,7 +112,7 @@ export const UbsList: React.FC<UbsListProps> = ({
 
       {/* Paginação */}
       {meta && meta.totalPaginas > 1 && (
-        <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800">
+        <div className="sticky bottom-0 -mx-3 -mb-3 px-3 py-2.5 flex items-center justify-between bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur border-t border-slate-200 dark:border-slate-800">
           <button
             type="button"
             disabled={page <= 1}
